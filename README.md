@@ -30,6 +30,28 @@ First customer: **Beat ID Ltd**, pitching its real pipeline of UK students' unio
 
 🚧 Under construction — 48-hour build. See `BUILDLOG.md` for the running log.
 
+**Live on Cloud Run:** https://greenroom-29925954133.europe-west2.run.app
+
+| Endpoint | Proves |
+|---|---|
+| [`/health`](https://greenroom-29925954133.europe-west2.run.app/health) | Container up, config validated, model constant |
+| [`/readyz`](https://greenroom-29925954133.europe-west2.run.app/readyz) | Firestore reachable from the service |
+| [`/hello`](https://greenroom-29925954133.europe-west2.run.app/hello) | ADK → Gemini 3.5 Flash on Vertex AI |
+
+## Google Cloud footprint
+
+| Thing | Value |
+|---|---|
+| Project | `beatid-greenroom` (number `29925954133`) |
+| Region | `europe-west2` (London) |
+| Firestore | Native mode, `europe-west2` |
+| Runtime identity | `greenroom-run@beatid-greenroom.iam.gserviceaccount.com` |
+| Roles | `datastore.user`, `secretmanager.secretAccessor`, `aiplatform.user`, `cloudtrace.agent`, `logging.logWriter`, `storage.objectAdmin` |
+
+The service runs as a dedicated least-privilege service account, not the default compute
+identity, and holds no credential of its own — Gemini and Firestore go through ADC, and
+the Gmail/Calendar refresh token is fetched from Secret Manager at call time.
+
 ## Mandatory stack (verified against live docs, 29 Aug 2026)
 
 | Component | Choice | Notes |

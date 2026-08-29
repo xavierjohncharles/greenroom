@@ -10,6 +10,7 @@ UV := uv
 PROJECT_ID ?= $(shell gcloud config get-value project 2>/dev/null)
 REGION     ?= europe-west2
 SERVICE    ?= greenroom
+RUNTIME_SA ?= greenroom-run@$(PROJECT_ID).iam.gserviceaccount.com
 
 .DEFAULT_GOAL := help
 
@@ -41,8 +42,9 @@ deploy: ## Build and deploy to Cloud Run (source deploy via Cloud Build; no loca
 	  --source . \
 	  --project=$(PROJECT_ID) \
 	  --region=$(REGION) \
+	  --service-account=$(RUNTIME_SA) \
 	  --allow-unauthenticated \
-	  --set-env-vars=GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$(PROJECT_ID),GOOGLE_CLOUD_LOCATION=$(REGION)
+	  --set-env-vars=GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$(PROJECT_ID),GOOGLE_CLOUD_LOCATION=$(REGION),GREENROOM_DRY_RUN=true
 
 .PHONY: lint
 lint: ## Ruff check + format check

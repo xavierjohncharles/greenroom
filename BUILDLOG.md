@@ -136,3 +136,46 @@ prompt injection and a live company inbox.
 rather than letting that surface as a 403 mid-negotiation on Monday.
 
 **Blocked on:** project ID, and the OAuth client itself (Xavier's hands — see checklist).
+
+---
+
+## Sun 30 Aug — Step 1 completed: live on Cloud Run
+
+Project `beatid-greenroom` (`29925954133`), `europe-west2`, Firestore Native, dedicated
+least-privilege runtime service account. `/health`, `/readyz` and `/hello` all green:
+Firestore reachable and ADK → Gemini 3.5 Flash answering on Vertex AI.
+
+No Cloud organisation exists on this account, so the OAuth client has to be **External**.
+That would normally mean 7-day refresh-token expiry, which would leave a judge
+reproducing this in September with a dead token. Checked the rules rather than assuming:
+an app in **In Production** status, even unverified, issues non-expiring refresh tokens —
+the cost is an "unverified app" warning screen and a 100-user cap. We have one user.
+So: External + published to Production, and the README warns judges about the screen.
+
+**Three bugs the first deploy found, all worth the trip:**
+
+1. **`config_dir()` was resolved relative to the installed package.** Fine in a checkout,
+   nonsense in a container where the package lives in site-packages and `config/` is at
+   `/app/config`. The container refused to boot with
+   `missing config file: /usr/local/lib/python3.12/config/brand.yaml` — which is the
+   fail-fast startup behaviour working exactly as intended, on its first real outing.
+   Now searches an ordered candidate list and names every path it tried on failure.
+
+2. **Cloud Run's front end swallows `/healthz`.** It answered our request with Google's
+   own 404 page before it ever reached the container — `/readyz` and `/hello` on the same
+   revision were fine, and the route was definitely registered. Renamed to `/health`.
+   Ten confusing minutes; noting it here so it is ten minutes nobody spends again.
+
+3. **The genai SDK reads `GOOGLE_GENAI_USE_VERTEXAI` from `os.environ`, not from our
+   Settings object.** On Cloud Run the vars are set on the service so it worked by
+   accident; locally, values loaded from `.env` were invisible to the SDK and it demanded
+   an API key. `Settings.export_genai_env()` now mirrors them, so local and deployed
+   behave identically — which matters, because "works on Cloud Run only" is not a thing
+   you want to discover on Monday.
+
+**One demo-credibility fix.** The hello agent was instructed to name its own model and
+confidently answered "Gemini 1.5 Pro" while being served by `gemini-3.5-flash`. Models
+do not reliably know their own ID. Removed the instruction: the model ID a judge sees now
+comes from our config constant and the Cloud Trace span, both of which are facts. Worth
+remembering for the Stage One check — a screenshot of a model naming itself proves
+nothing.

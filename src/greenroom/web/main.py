@@ -71,10 +71,14 @@ app = FastAPI(
 )
 
 
-@app.get("/healthz")
-async def healthz() -> dict[str, Any]:
+@app.get("/health")
+async def health() -> dict[str, Any]:
     """Liveness + config check. Deliberately does not touch Firestore or Gemini,
-    so it stays fast and cannot fail for reasons outside this container."""
+    so it stays fast and cannot fail for reasons outside this container.
+
+    Named /health, not /healthz: Cloud Run's front end answers /healthz itself with a
+    404 before the request ever reaches the container. Cost us ten confusing minutes.
+    """
     settings = get_settings()
     try:
         config = get_config()
@@ -133,7 +137,7 @@ async def index() -> dict[str, str]:
         "service": "greenroom",
         "version": __version__,
         "dashboard": "coming at build step 4",
-        "health": "/healthz",
+        "health": "/health",
         "ready": "/readyz",
         "round_trip_proof": "/hello",
     }

@@ -16,10 +16,15 @@ hello_agent = LlmAgent(
     name="hello",
     model=GEMINI_MODEL,
     description="Health-check agent that proves the ADK -> Gemini round trip works.",
+    # Deliberately does NOT ask the model to name itself. Asked to, it confidently
+    # answers with the wrong model ID — the first run of this agent claimed to be
+    # "Gemini 1.5 Pro" while served by gemini-3.5-flash. The model ID a judge sees
+    # comes from our config constant and the Cloud Trace span, which are facts.
     instruction=(
         "You are the deployment health check for Greenroom, an autonomous booking agent "
-        "for a live music brand. Reply with exactly one short sentence confirming you are "
-        "running, and name the model you are. Do not add pleasantries or formatting."
+        "for a live music brand. Reply with exactly one short sentence confirming the "
+        "agent runtime is reachable. Do not name your model, and do not add pleasantries "
+        "or formatting."
     ),
 )
 

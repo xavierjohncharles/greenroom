@@ -157,3 +157,25 @@ def test_empty_targets_file_is_rejected(tmp_path: Path):
 def test_missing_file_is_reported_clearly(tmp_path: Path):
     with pytest.raises(ConfigError, match="missing config file"):
         load_policy(tmp_path / "nope.yaml")
+
+
+# ------------------------------------------------------------------ config discovery
+
+
+def test_config_is_found_when_package_is_installed_elsewhere(tmp_config: Path, monkeypatch):
+    """Regression: the first Cloud Run deploy failed because config_dir() resolved
+    relative to the installed package (site-packages) rather than the working
+    directory. Discovery must work from a container layout, not just a checkout."""
+    from greenroom.config.loader import config_dir
+
+    monkeypatch.delenv("GREENROOM_CONFIG_DIR", raising=False)
+    monkeypatch.chdir(tmp_config.parent)
+    assert config_dir() == tmp_config
+
+
+def test_missing_config_dir_names_every_path_it_searched(tmp_path, monkeypatch):
+    from greenroom.config.loader import ConfigError, config_dir
+
+    monkeypatch.setenv("GREENROOM_CONFIG_DIR", str(tmp_path / "nowhere"))
+    with pytest.raises(ConfigError, match="Searched"):
+        config_dir()

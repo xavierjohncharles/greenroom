@@ -22,13 +22,37 @@ class ConfigError(RuntimeError):
     """Raised when a config file is missing or fails validation."""
 
 
-def config_dir() -> Path:
-    """Where config/ lives. Overridable for tests via GREENROOM_CONFIG_DIR."""
+def config_candidates() -> list[Path]:
+    """Every place config/ might legitimately live, in priority order.
+
+    This has to work in three different layouts, and an earlier version that assumed
+    only the third one failed the first Cloud Run deploy:
+
+      1. an explicit override, used by tests;
+      2. `./config` relative to the working directory — the container layout, where
+         the package is installed into site-packages and config/ is copied to /app;
+      3. the repo root relative to this file — a source checkout or editable install.
+    """
     override = os.environ.get("GREENROOM_CONFIG_DIR")
     if override:
-        return Path(override)
-    # src/greenroom/config/loader.py -> repo root
-    return Path(__file__).resolve().parents[3] / "config"
+        return [Path(override)]
+    return [
+        Path.cwd() / "config",
+        Path(__file__).resolve().parents[3] / "config",
+    ]
+
+
+def config_dir() -> Path:
+    """The first candidate directory that actually contains the config files."""
+    candidates = config_candidates()
+    for candidate in candidates:
+        if (candidate / "brand.yaml").exists():
+            return candidate
+    raise ConfigError(
+        "could not locate config/. Searched:\n  "
+        + "\n  ".join(str(c) for c in candidates)
+        + "\nSet GREENROOM_CONFIG_DIR to point at it."
+    )
 
 
 def _read_yaml(path: Path) -> dict:

@@ -72,8 +72,28 @@ class Settings(BaseSettings):
         """True once we have enough to talk to Google Cloud at all."""
         return bool(self.google_cloud_project)
 
+    def export_genai_env(self) -> None:
+        """Mirror the backend selection into os.environ.
+
+        The google-genai SDK underneath ADK reads GOOGLE_GENAI_USE_VERTEXAI and friends
+        from the *process environment*, not from our Settings object. On Cloud Run they
+        are set on the service so it works by accident; locally, values that came from
+        .env are invisible to the SDK and it falls back to demanding an API key. Export
+        them explicitly so both paths behave identically.
+        """
+        import os
+
+        if self.google_genai_use_vertexai:
+            os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "true")
+        if self.google_cloud_project:
+            os.environ.setdefault("GOOGLE_CLOUD_PROJECT", self.google_cloud_project)
+        if self.google_cloud_location:
+            os.environ.setdefault("GOOGLE_CLOUD_LOCATION", self.google_cloud_location)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Process-wide singleton. Cached so config is read once per container."""
-    return Settings()
+    settings = Settings()
+    settings.export_genai_env()
+    return settings

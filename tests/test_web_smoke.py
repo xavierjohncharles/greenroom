@@ -13,7 +13,7 @@ from greenroom.web.main import app
 
 def test_healthz_reports_the_mandated_model():
     with TestClient(app) as client:
-        r = client.get("/healthz")
+        r = client.get("/health")
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "ok"
@@ -25,7 +25,7 @@ def test_healthz_reports_the_mandated_model():
 def test_dry_run_defaults_to_true():
     """Forgetting to set the flag must never result in real mail being sent."""
     with TestClient(app) as client:
-        assert client.get("/healthz").json()["dry_run"] is True
+        assert client.get("/health").json()["dry_run"] is True
 
 
 def test_index_is_reachable():
