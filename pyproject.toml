@@ -65,6 +65,9 @@ packages = ["src/greenroom"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["src"]
+markers = [
+  "integration: touches real Firestore; skipped unless GOOGLE_CLOUD_PROJECT is set",
+]
 
 [tool.ruff]
 line-length = 100

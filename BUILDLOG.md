@@ -179,3 +179,56 @@ do not reliably know their own ID. Removed the instruction: the model ID a judge
 comes from our config constant and the Cloud Trace span, both of which are facts. Worth
 remembering for the Stage One check — a screenshot of a model naming itself proves
 nothing.
+
+---
+
+## Sun 30 Aug — Step 3: state machine, job queue, Scheduler
+
+94 tests, 23 of them running against the real Firestore database in a throwaway
+namespace. That was a deliberate choice over a hand-written fake queue: the claims being
+made here — "a crashed worker is safely re-runnable", "the daily cap holds under
+concurrency" — are claims about Firestore's transaction semantics, and a fake would only
+ever prove that the fake works.
+
+**The Scheduler is deliberately not an LlmAgent.** Every other agent in Greenroom needs
+judgement. The Scheduler decides whether the clock says 09:00, whether a counter is
+under 25, and whether a flag is set. Putting a language model in that loop would add
+latency, cost and non-determinism to the one component whose whole job is to be
+predictable, and would make "why did it send at 3am?" unanswerable. It gets the same
+tool scoping as the reasoning agents — it holds the send and calendar-create tools and
+the read-side agents do not — but it is a plain worker. Using ADK everywhere would have
+demoed no better and engineered considerably worse.
+
+**Three failure modes the design had to answer explicitly:**
+
+1. **A blocked send is not a failed send.** The first version treated "outside the send
+   window" as a job failure. A pitch queued on Friday evening would then burn all five
+   retry attempts overnight and be `dead` by Monday morning — the agent would have
+   quietly killed its own pipeline over a weekend. Blocked jobs are now requeued with
+   the attempt count *decremented*, so only real errors consume retries.
+
+2. **Reserve the send slot before sending, not after.** Counting afterwards lets two
+   Cloud Run instances both pass the cap check and both send. Reserving first means the
+   worst case is a burnt slot on a failed send, which `release_send_slot` gives back.
+   Erring toward under-sending is the right direction for a cap that exists to avoid
+   embarrassing a real company.
+
+3. **A follow-up must check the target's status before firing.** A day-3 nudge queued on
+   Monday must not reach a contact who replied on Tuesday. That is the single most
+   embarrassing thing an outreach agent can do, and it is the kind of bug that only
+   shows up in front of a customer. There is a test named after it.
+
+**The whole follow-up ladder is queued up front**, at pitch time, rather than one job
+scheduling the next. Two reasons: the entire future of a thread is visible in the jobs
+collection the moment it starts, which is genuinely nice to show on camera; and a crash
+between follow-ups cannot lose the rest of the sequence.
+
+**The README state diagram is generated from the transition table** by `make diagram`.
+A hand-drawn architecture diagram that has drifted from the code is worse than no
+diagram, and this one cannot drift.
+
+**Two of my own test bugs, worth recording** because both were tests that passed for the
+wrong reason first: a Saturday fixture dated *before* the jobs it was meant to block, so
+nothing was ever claimed and "blocked" was trivially zero; and a kill-switch test that
+never enqueued a job at all. Both would have shipped as green ticks over a feature that
+did not work.

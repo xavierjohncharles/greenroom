@@ -54,3 +54,7 @@ lint: ## Ruff check + format check
 .PHONY: fmt
 fmt: ## Ruff autoformat
 	$(UV) run ruff format .
+
+.PHONY: diagram
+diagram: ## Regenerate the README state diagram from state/machine.py
+	$(UV) run python scripts/render_state_diagram.py

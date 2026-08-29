@@ -105,9 +105,68 @@ make run-local  # dashboard + agent on :8080, dry-run (logs sends, never sends)
 make deploy     # Cloud Run via Cloud Build
 ```
 
+## Pipeline state machine
+
+Every status change goes through `assert_transition`. That is not tidiness: it means an
+agent talked into something strange by a hostile email cannot move a target somewhere
+the pipeline does not allow. `escalated` is reachable from every live status, because
+"ask a human" must never be blocked by bookkeeping.
+
+This diagram is generated from the transition table in `state/machine.py` by
+`make diagram`, so it cannot drift from the code.
+
+<!-- STATE-DIAGRAM:START -->
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued
+    queued --> declined
+    queued --> escalated
+    queued --> researched
+    researched --> declined
+    researched --> escalated
+    researched --> pitched
+    pitched --> closed_no_reply
+    pitched --> declined
+    pitched --> escalated
+    pitched --> replied
+    replied --> booked
+    replied --> closed_no_reply
+    replied --> declined
+    replied --> escalated
+    replied --> negotiating
+    negotiating --> booked
+    negotiating --> closed_no_reply
+    negotiating --> declined
+    negotiating --> escalated
+    escalated --> booked
+    escalated --> closed_no_reply
+    escalated --> declined
+    escalated --> negotiating
+    escalated --> replied
+    booked --> [*]
+    closed_no_reply --> [*]
+    declined --> [*]
+```
+
+<!-- STATE-DIAGRAM:END -->
+
+## Durability
+
+Every side effect — an email, a calendar booking, a poster — is a job document with an
+idempotency key, an attempt count and a worker lease.
+
+| Property | How | Proven by |
+|---|---|---|
+| No double sends | Document id is derived from the idempotency key, so a redelivered Pub/Sub notification is a no-op | `test_enqueueing_the_same_key_twice_creates_one_job` |
+| No two workers on one job | Claiming is a Firestore transaction stamping a worker id and lease | `test_a_job_can_only_be_claimed_once` |
+| Crashes self-heal | A dead worker's lease lapses and the job returns to the queue unaided | `test_a_crashed_worker_releases_its_job` |
+| Repeated failure surfaces | Backoff, then `dead` for a human rather than a silent retry loop | `test_failure_backs_off_then_dies_for_a_human` |
+| Caps hold under concurrency | The daily slot is reserved in a transaction *before* the send, and released if it fails | `test_the_daily_cap_is_enforced_atomically` |
+
 ## Architecture
 
-Diagram lands at step 9 (Mermaid + exported PNG).
+Full diagram lands at step 9 (Mermaid + exported PNG).
 
 ## Learnings
 
