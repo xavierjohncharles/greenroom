@@ -1,0 +1,49 @@
+# Greenroom brand configuration for Beat ID Ltd.
+# The Writer and Negotiator read this. Nothing here is a secret.
+# Xavier: edit freely — every field below lands in the drafted email.
+
+company_name: "Beat ID Ltd"
+sender_name: "Xavier John-Charles"
+sender_email: "admin@beatidapp.com"
+sender_role: "Founder"
+
+# One paragraph. This is the spine of the pitch; the Writer personalises around it.
+pitch: >-
+  Beat ID runs high-energy live music and DJ nights built for student audiences —
+  a curated line-up, a proper production setup, and a promo push that fills the room
+  rather than relying on the venue's own mailing list. We handle booking, artists,
+  sound and marketing end to end, so the union gets a sold-out night without adding
+  work to an already stretched events team.
+
+# Concrete, checkable claims. The Writer is instructed to use these and invent nothing.
+proof_points:
+  - "Run three times in East London, 80+ attendees per night"
+  - "Drives measurable bar spend across the night, not just door numbers"
+  - "Full production handled in-house — sound, lighting, artist liaison"
+  - "Promo campaign run by us across social and student networks"
+
+links:
+  website: "https://beatidapp.com"
+  # Xavier: add these if you have them — they materially improve reply rates.
+  past_events: ""
+  mixes_or_video: ""
+  press_or_reviews: ""
+
+tone_notes: >-
+  Warm, direct, and specific. Write like a person who has actually run these nights,
+  not like a marketing department. Short paragraphs. No exclamation marks, no "I hope
+  this email finds you well", no stacked adjectives. Lead with something true and
+  specific about their venue or programme that proves the email was not a mail-merge.
+  British English. Sign off simply. Aim for 120-180 words.
+
+# Hard constraints on generated copy. The Writer is checked against these.
+copy_rules:
+  max_words: 200
+  banned_phrases:
+    - "I hope this email finds you well"
+    - "circle back"
+    - "synergy"
+    - "reach out"
+    - "game-changer"
+    - "revolutionary"
+  require_specific_hook: true   # must reference something real about the target

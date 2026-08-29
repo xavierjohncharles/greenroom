@@ -1,0 +1,105 @@
+# Greenroom deal envelope + operational limits.
+#
+# This file is the agent's authority to act. The Negotiator may agree to anything
+# that fits inside it, and MUST escalate anything that does not — citing the exact
+# rule id it breaches. Every rule therefore has a stable `id` so escalations can
+# point at a line rather than paraphrase it.
+#
+# Xavier: these are seeded with plausible values. Correct them — especially
+# `fee.standard`, `fee.floor` and `escalate.max_attendees`.
+
+version: 1
+
+# --- When we can play -------------------------------------------------------
+availability:
+  # Inclusive date windows the agent may offer. Anything outside → escalate.
+  windows:
+    - id: "freshers-2026"
+      label: "Freshers 2026"
+      start: "2026-09-14"
+      end: "2026-10-11"
+    - id: "autumn-2026"
+      label: "Autumn term 2026"
+      start: "2026-10-12"
+      end: "2026-12-12"
+    - id: "refreshers-2027"
+      label: "Refreshers 2027"
+      start: "2027-01-11"
+      end: "2027-02-07"
+  # Nights of the week we will accept. 0=Mon .. 6=Sun.
+  allowed_weekdays: [2, 3, 4, 5]   # Wed, Thu, Fri, Sat
+  # Minimum notice before an event date.
+  min_lead_time_days: 21
+
+# --- Money ------------------------------------------------------------------
+fee:
+  currency: "GBP"
+  standard: 1200        # what we open at
+  floor: 850            # the agent may negotiate down to, but never below, this
+  # A counter-offer at or above `floor` is inside policy and may be accepted.
+  # Below `floor` → escalate (rule: fee.floor).
+  deposit_pct: 50
+  payment_terms_days: 14
+
+# --- What the fee includes --------------------------------------------------
+includes:
+  - "Headline DJ set plus one support slot"
+  - "Full sound and lighting production"
+  - "Artist liaison and rider management"
+  - "Social promo campaign in the two weeks before the event"
+  - "Post-event attendance and bar-spend summary"
+
+excludes:
+  - "Venue hire and security"
+  - "Ticketing platform fees"
+  - "Any licensing beyond our own PLI"
+
+# --- Calls ------------------------------------------------------------------
+meetings:
+  duration_minutes: 30
+  timezone: "Europe/London"
+  # The agent may only propose slots inside these hours.
+  earliest_hour: 10
+  latest_hour: 17
+  allowed_weekdays: [0, 1, 2, 3, 4]
+  # How many alternative slots to offer in one email.
+  slots_to_offer: 3
+  # Never book sooner than this many hours from now.
+  min_notice_hours: 24
+
+# --- Always needs a human ---------------------------------------------------
+# Any of these, no matter how good the deal looks, goes to Xavier.
+escalate:
+  free_event: true            # any request to play for free or "for exposure"
+  exclusivity: true           # any exclusivity or non-compete clause
+  max_attendees: 600          # anything above this capacity
+  multi_date_commitment: true # any request to commit to more than one date at once
+  contract_or_legal: true     # anything mentioning contracts, terms, insurance, legal
+  media_or_recording: true    # filming, streaming or recording rights
+  # Catch-all: if the Negotiator cannot map a request onto a rule above or onto an
+  # explicit allowance in this file, it escalates. Silence is not permission.
+  unmatched_requests: true
+
+# --- Operational limits -----------------------------------------------------
+# The Scheduler enforces these. They are hard caps, not suggestions.
+operations:
+  max_sends_per_day: 25
+  send_window:
+    timezone: "Europe/London"
+    start_hour: 9
+    end_hour: 17
+    weekdays: [0, 1, 2, 3, 4]   # never send at the weekend
+  follow_up_days: [3, 7]        # then close as no-reply
+  close_after_days: 14
+  # Cost ceiling across all model + media calls in a rolling day. Trips the kill switch.
+  daily_spend_cap_usd: 20.0
+  # Veto mode: how long a draft waits on the dashboard before it sends itself.
+  veto_window_minutes: 30
+
+# --- Trust dial -------------------------------------------------------------
+trust:
+  default_mode: "review"            # review | veto | autopilot
+  promote_after_clean_approvals: 3  # consecutive approvals with zero edits
+  demote_on_edit: true
+  # Escalations are always review, whatever the target's mode says.
+  escalations_always_review: true

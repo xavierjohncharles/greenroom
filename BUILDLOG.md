@@ -56,3 +56,41 @@ source deploys build on Cloud Build, so `make deploy` needs no local daemon.
 credential-shaped filenames plus `credentials/` and `.env*`), Makefile with
 `setup / test / run-local / deploy`, README with the housekeeping checklist for granting
 judge access.
+
+---
+
+## Sun 30 Aug (00:xx) — Step 1: scaffold, config, ADK round trip
+
+**Verified the ADK API against the installed package rather than the docs.** Worth the
+five minutes: `adk.dev`'s quickstart page still serves 1.x-flavoured examples, but
+introspecting `google-adk==2.8.0` confirmed the real surface —
+`LlmAgent(model=, name=, instruction=, tools=[], output_schema=, before_tool_callback=…)`,
+`Runner(app_name=, agent=, session_service=, plugins=)`,
+`runner.run_async(user_id=, session_id=, new_message=)`. Two finds that shape later
+steps: `LlmAgent.output_schema` gives the Gatekeeper structured output for free, and
+`before_tool_callback` is the right place to enforce tool scoping and emit an OTel span
+per tool call, rather than trusting an instruction.
+
+**Decision: not using `adk deploy cloud_run` or `get_fast_api_app()`.** Greenroom needs
+`/inbound`, `/tick` and the dashboard on the same service; the ADK-generated app exposes
+none of them, and ADK's own docs say its bundled web UI is not for production. We own
+the FastAPI app and call `Runner` in-process, which is a supported path and keeps one
+service, one container, one URL for the demo.
+
+**Config is strict on purpose.** Every schema is `extra="forbid"` and cross-field
+validated: `fee.floor` above `fee.standard` is rejected (the agent would have no room to
+negotiate and would escalate every counter-offer), a follow-up scheduled after
+`close_after_days` is rejected (it could never fire), and a date window ending before it
+starts is rejected. A misspelled policy key now fails at container start rather than
+silently changing what the agent will agree to at 2am. 24 tests, all passing.
+
+**Two defaults chosen so that forgetting something is safe rather than expensive:**
+`GREENROOM_DRY_RUN` defaults to `true`, and `trust.default_mode` is `review`. The failure
+mode of a mistake is "nothing happened", not "we emailed a real students' union".
+
+**Snag: `pydantic[email]`.** `EmailStr` needs the extra, which is not obvious until it
+raises at import time. Added to `pyproject.toml`.
+
+**Blocked on:** the GCP project ID. Everything above runs and is tested locally; the
+Cloud Run half of step 1 (prove the round trip on real infrastructure) needs
+`gcloud auth login` and a project. `gcloud config get-value project` is currently unset.

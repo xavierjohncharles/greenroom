@@ -36,7 +36,7 @@ First customer: **Beat ID Ltd**, pitching its real pipeline of UK students' unio
 |---|---|---|
 | Model | `gemini-3.5-flash` via **Vertex AI** | Same model ID on Gemini API and Vertex. Vertex chosen so there is no API key to store — auth is ADC on Cloud Run. |
 | Agent framework | **Google ADK** `2.8.0` (Python) | Current release, 26 Aug 2026. ADK 2.x is a breaking rewrite of 1.x (graph Workflow Runtime). |
-| Runtime | **Cloud Run** | Agent + dashboard in one service; custom FastAPI app wrapping `google.adk.cli.fast_api.get_fast_api_app`. |
+| Runtime | **Cloud Run** | Agent + dashboard in one service. We own the FastAPI app and drive agents through `google.adk.runners.Runner`; see BUILDLOG for why not `adk deploy cloud_run`. |
 | State | **Firestore** (Native mode) | |
 | Inbound | **Gmail watch → Pub/Sub → push → `/inbound`** | Watch scoped to the `greenroom` label, never INBOX. |
 | Ticks | **Cloud Scheduler** | Hourly tick + an 08:00 Europe/London morning brief. |
