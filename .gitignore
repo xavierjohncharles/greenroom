@@ -1,0 +1,70 @@
+# ---- Secrets. Nothing credential-shaped ever lands in this repo. ----
+.env
+.env.*
+!.env.example
+credentials/
+secrets/
+*-key.json
+*_key.json
+service-account*.json
+client_secret*.json
+oauth_client*.json
+token.json
+tokens.json
+*.pem
+*.p12
+gcp-key*.json
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ---- Envs ----
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# ---- Test / tooling ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.hypothesis/
+
+# ---- Editors / OS ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# ---- Build / deploy scratch ----
+.gcloudignore.local
+*.log
+scratch/
+tmp/
