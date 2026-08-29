@@ -94,3 +94,45 @@ raises at import time. Added to `pyproject.toml`.
 **Blocked on:** the GCP project ID. Everything above runs and is tested locally; the
 Cloud Run half of step 1 (prove the round trip on real infrastructure) needs
 `gcloud auth login` and a project. `gcloud config get-value project` is currently unset.
+
+---
+
+## Sun 30 Aug — Step 2: OAuth, Gmail and Calendar wrappers
+
+**Chose a user OAuth client over a service account with domain-wide delegation.** DWD
+would have been quicker to wire up, but it grants access to *every* mailbox in the
+Workspace domain and is configured at the org level. A single user-consented refresh
+token for admin@beatidapp.com can only ever reach that one mailbox, and Xavier can
+revoke it himself without touching the admin console. Smaller blast radius for a system
+whose whole pitch is "it acts on my real inbox".
+
+**Containment is structural, not instructional.** The scope we are forced to hold
+(`gmail.modify` — nothing narrower can attach a label to a thread) is broader than the
+rules Greenroom must obey, so the gap is closed in code:
+
+  * `GmailTool` has no `delete`, `trash`, `untrash`, `archive` or `remove_label` method.
+    The capability is absent, not discouraged. There is a test that fails if anyone
+    adds one.
+  * `CalendarTool` has no `update`, `patch`, `delete` or `move`. Create-only, asserted.
+  * Every send re-checks the recipient against `targets.csv`, including replies — so a
+    poisoned reply-to header cannot walk the conversation to a new address.
+  * Reads take a threadId Greenroom recorded, or a `label:greenroom` query. There is no
+    "fetch arbitrary message" entry point for an injection to reach for.
+  * `freebusy` is used instead of `events.list`, so proposing a slot never reads the
+    contents of Xavier's other meetings — only whether a window is busy.
+
+Nine of the 38 tests exist purely to assert the absent capabilities. That felt like
+over-testing until I wrote the note above: these are the only things standing between a
+prompt injection and a live company inbox.
+
+**Idempotency on the calendar.** The job's idempotency key becomes the Calendar event
+`id`, so a re-run of a crashed booking job collides (409) instead of double-booking. The
+409 is caught and treated as success, because it is.
+
+**`prompt=consent` matters more than it looks.** Without `access_type=offline` *and*
+`prompt=consent`, Google returns no refresh token when an account has consented before
+— the local flow appears to succeed and the deployed agent then silently cannot refresh.
+`scripts/bootstrap_oauth.py` forces both and hard-fails if any scope was not granted,
+rather than letting that surface as a 403 mid-negotiation on Monday.
+
+**Blocked on:** project ID, and the OAuth client itself (Xavier's hands — see checklist).

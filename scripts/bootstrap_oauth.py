@@ -1,0 +1,131 @@
+"""One-time: consent as admin@beatidapp.com and put the refresh token in Secret Manager.
+
+https://developers.google.com/identity/protocols/oauth2/native-app
+https://docs.cloud.google.com/secret-manager/docs/create-secret-quickstart
+
+Run this once, locally, from the machine where you can open a browser:
+
+    uv run python scripts/bootstrap_oauth.py --client-json ~/Downloads/client_secret_*.json
+
+It opens a browser, asks you to sign in as the agent mailbox, and writes two secrets:
+
+    greenroom-oauth-client          the OAuth client JSON
+    greenroom-oauth-refresh-token   {"refresh_token": "..."}
+
+The refresh token is never written to disk by this script and never printed. Delete the
+downloaded client JSON afterwards — the copy in Secret Manager is the one that matters.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from google.cloud import secretmanager
+from google_auth_oauthlib.flow import InstalledAppFlow
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from greenroom.tools.google_auth import SCOPES  # noqa: E402
+
+
+def upsert_secret(
+    client: secretmanager.SecretManagerServiceClient, project: str, name: str, payload: str
+) -> str:
+    parent = f"projects/{project}"
+    secret_path = f"{parent}/secrets/{name}"
+    try:
+        client.get_secret(request={"name": secret_path})
+    except Exception:
+        client.create_secret(
+            request={
+                "parent": parent,
+                "secret_id": name,
+                "secret": {"replication": {"automatic": {}}},
+            }
+        )
+        print(f"  created secret {name}")
+    version = client.add_secret_version(
+        request={"parent": secret_path, "payload": {"data": payload.encode("utf-8")}}
+    )
+    return version.name
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--client-json", required=True, help="OAuth client JSON from the console")
+    parser.add_argument("--project", help="GCP project id (defaults to gcloud's current)")
+    parser.add_argument("--client-secret-name", default="greenroom-oauth-client")
+    parser.add_argument("--token-secret-name", default="greenroom-oauth-refresh-token")
+    parser.add_argument("--port", type=int, default=8765, help="local redirect port")
+    args = parser.parse_args()
+
+    project = args.project
+    if not project:
+        import subprocess
+
+        project = subprocess.run(
+            ["gcloud", "config", "get-value", "project"], capture_output=True, text=True
+        ).stdout.strip()
+    if not project or project == "(unset)":
+        print("No project. Pass --project or run: gcloud config set project <id>", file=sys.stderr)
+        return 1
+
+    client_path = Path(args.client_json).expanduser()
+    if not client_path.exists():
+        print(f"Client JSON not found: {client_path}", file=sys.stderr)
+        return 1
+
+    print(f"Project: {project}")
+    print("Scopes being requested:")
+    for s in SCOPES:
+        print(f"  {s}")
+    print()
+    print("A browser will open. Sign in as the AGENT MAILBOX (admin@beatidapp.com),")
+    print("not as your personal account.")
+    print()
+
+    flow = InstalledAppFlow.from_client_secrets_file(str(client_path), scopes=list(SCOPES))
+    # access_type=offline + prompt=consent guarantees a refresh token even if this
+    # account has consented before; without prompt=consent Google returns none on a
+    # repeat authorisation and the deployed agent silently cannot refresh.
+    creds = flow.run_local_server(port=args.port, access_type="offline", prompt="consent")
+
+    if not creds.refresh_token:
+        print(
+            "No refresh token returned. Re-run; the consent screen must be shown.", file=sys.stderr
+        )
+        return 1
+
+    granted = set(creds.scopes or [])
+    missing = set(SCOPES) - granted
+    if missing:
+        print("WARNING: these scopes were not granted:", file=sys.stderr)
+        for s in sorted(missing):
+            print(f"  {s}", file=sys.stderr)
+        print("The agent will fail at runtime. Re-run and tick every box.", file=sys.stderr)
+        return 1
+
+    client = secretmanager.SecretManagerServiceClient()
+    print("\nWriting secrets...")
+    upsert_secret(client, project, args.client_secret_name, client_path.read_text())
+    upsert_secret(
+        client, project, args.token_secret_name, json.dumps({"refresh_token": creds.refresh_token})
+    )
+
+    print("\n✓ Done. Both secrets are in Secret Manager.")
+    print("\nNext:")
+    print(f"  1. rm {client_path}          # the console copy is no longer needed")
+    print("  2. Grant the Cloud Run service account read access:")
+    print(
+        f"     gcloud secrets add-iam-policy-binding {args.token_secret_name} \\\n"
+        f"       --member=serviceAccount:<RUNTIME_SA> --role=roles/secretmanager.secretAccessor"
+    )
+    print("  3. Verify from the deployed service:  curl $SERVICE_URL/readyz")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
