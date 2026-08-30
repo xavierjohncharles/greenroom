@@ -1,0 +1,29 @@
+flowchart TB
+  subgraph run["Cloud Run · europe-west2 · one service"]
+    IN["/inbound<br/><i>OIDC</i>"]
+    TICK["/tick<br/><i>OIDC</i>"]
+    DASH["Dashboard<br/><i>cookie gate</i>"]
+    AGENTS["ADK 2.8 agents<br/>+ Scheduler"]
+  end
+
+  MAILBOX["beatid.greenroom@gmail.com<br/><i>labels: greenroom · /escalated · /quarantine</i>"]
+  MAILBOX -->|"watch on the label,<br/>never INBOX"| PS["Pub/Sub"]
+  PS -->|"push"| IN
+  SCHEDJ["Cloud Scheduler<br/><i>hourly · 08:00</i>"] --> TICK
+
+  IN --> AGENTS
+  TICK --> AGENTS
+  DASH <--> FS
+  AGENTS <--> FS[("Firestore<br/><i>targets · threads · messages · jobs<br/>drafts · decisions · events</i>")]
+  AGENTS --> GEM["Gemini 3.5 Flash<br/><i>Vertex AI</i>"]
+  AGENTS --> IMG["gemini-3-pro-image"]
+  IMG --> GCS[("Cloud Storage")]
+  AGENTS --> GAPI["Gmail + Calendar API"]
+  GAPI --> MAILBOX
+  SM["Secret Manager<br/><i>OAuth refresh token</i>"] -.->|"fetched at call time,<br/>never on disk"| GAPI
+  AGENTS -.-> TRACE["Cloud Trace<br/><i>span per agent + tool call</i>"]
+
+  classDef store fill:#E4FAFE,stroke:#22D3EE,color:#0A6D80
+  classDef sec fill:#FDE9EF,stroke:#D30D4F,color:#8A0A34
+  class FS,GCS store
+  class SM sec

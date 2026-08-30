@@ -744,3 +744,47 @@ pitch: an email with no poster is a slightly plainer email, and an email that ne
 because an image model was busy is a lost target. The attachment is read back from Cloud
 Storage at send time rather than carried in the job payload, so a re-run picks up the
 current poster and job documents stay small.
+
+---
+
+## Sun 30 Aug — Steps 9 and 10: diagrams, README, demo seed
+
+223 tests. Feature-complete against the brief with a day in hand.
+
+**The first architecture diagram was unreadable and I nearly shipped it.** One graph
+holding config, agents, infrastructure, Google APIs, the mailbox and the human produced
+1904×1576 of crossing edges. It was *accurate*, which is what made it tempting — every box
+and arrow was correct. But "clean architecture diagram" is a judging criterion and a
+judge has about ten seconds, so accuracy was not the bar.
+
+Split into two: one horizontal diagram for the loop, one for the infrastructure. Both
+readable at a glance, and the loop diagram now carries the three claims worth making —
+policy is deterministic, the Gatekeeper is a hard stop, the allow-list is checked at send
+time — as visual weight rather than annotations.
+
+Two mechanical notes for anyone rendering Mermaid to PNG without Node: mermaid.ink's
+`pako:` endpoint works from `curl` but 403s from `urllib` on the default user agent, and
+`scale` is rejected unless `width` or `height` is also set. Also worth knowing that
+Mermaid lays out cycles badly — an early attempt to force top-to-bottom produced a
+3341px column with a duplicated node, because I had added a second "Trust dial" to break
+a back-edge and forgotten it would render as a second box.
+
+**`seed_demo.py` makes demo data inert by construction rather than by care.** Seeded
+targets use addresses at `.example.invalid` — a reserved TLD that cannot resolve — and,
+more importantly, they are not in `config/targets.csv`, which is the send allow-list. So
+even if someone pasted one into the CSV by hand, the address still could not receive mail.
+Every seeded document carries `demo: true` and `--clear` removes exactly those, so a seed
+before recording cannot damage real pipeline state.
+
+That property was free, and it was free because the allow-list reads the CSV rather than
+Firestore. A design choice made on Saturday for containment reasons turned out on Sunday
+to also make demo data safe. Worth noting because it is the second time this build that
+narrowing something for security made an unrelated problem disappear — the other being the
+dedicated mailbox, which fixed the Zoho blocker and produced a clean demo inbox at the
+same time.
+
+**The README is written for someone reproducing this from nothing.** Both
+`serviceAccountTokenCreator` grants — Pub/Sub's and Cloud Scheduler's — are called out
+explicitly, because each one fails *silently* when missing and between them they cost
+about an hour today. That is the kind of thing a README exists for and a doc page will
+not tell you.

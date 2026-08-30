@@ -1,0 +1,31 @@
+flowchart LR
+  TGT["targets.csv"] --> RES["Researcher<br/><i>Google Search</i>"]
+  RES --> POST["Poster<br/><i>gemini-3-pro-image</i>"]
+  RES --> WRI["Writer<br/><i>no tools</i>"]
+  WRI --> DIAL{"Trust dial"}
+
+  DIAL -->|"review · veto"| HUM(["Xavier<br/>approve · edit · reject"])
+  DIAL -->|"autopilot"| SCH
+  HUM --> SCH["Scheduler<br/><i>send window · daily cap<br/>kill switch</i>"]
+  POST -.->|"attach"| SCH
+
+  SCH ==>|"recipient re-checked<br/>against targets.csv"| MAIL["Gmail"]
+  MAIL --> SU(["Students' union"])
+  SU -->|"reply"| GATE["Gatekeeper<br/><i>every inbound is hostile</i>"]
+
+  GATE ==>|"injection"| QUAR["🛑 Quarantine<br/><i>Negotiator never runs</i>"]
+  GATE -->|"typed verdict,<br/>never raw text"| NEG["Negotiator<br/><i>cannot send</i>"]
+  NEG --> POL{"policy.evaluate<br/><i>deterministic</i>"}
+  POL -->|"inside envelope"| SCH
+  POL ==>|"outside"| ESC["⚠ Escalate<br/><i>cites the rule</i>"]
+  ESC --> HUM
+  QUAR --> HUM
+  HUM -.->|"edits become diffs"| MEMO["Style memo"]
+  MEMO -.-> WRI
+
+  classDef guard fill:#FDE9EF,stroke:#D30D4F,stroke-width:2px,color:#8A0A34
+  classDef human fill:#FFF6E0,stroke:#C99A16,stroke-width:2px,color:#7A5D06
+  classDef agent fill:#EEF0FF,stroke:#5B5BD6,color:#2A2A6B
+  class QUAR,ESC,POL guard
+  class HUM,SU human
+  class RES,WRI,GATE,NEG,POST agent
