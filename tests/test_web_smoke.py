@@ -28,8 +28,21 @@ def test_dry_run_defaults_to_true():
         assert client.get("/health").json()["dry_run"] is True
 
 
-def test_index_is_reachable():
+def test_index_serves_the_dashboard():
+    """`/` is the server-rendered pipeline board from step 4, not a JSON signpost."""
     with TestClient(app) as client:
         r = client.get("/")
         assert r.status_code == 200
-        assert r.json()["service"] == "greenroom"
+        assert "text/html" in r.headers["content-type"]
+        assert "Greenroom" in r.text
+
+
+def test_reserved_log_keys_do_not_break_the_request_path():
+    """Regression: extra={"created": n} raised KeyError inside Logger.makeRecord and
+    returned a 500 from /admin/sync-targets. A log line must never be able to fail a
+    request, so reserved keys are renamed rather than raised."""
+    from greenroom.obs import get_logger
+
+    log = get_logger("test.reserved")
+    for reserved in ("created", "message", "module", "filename", "process"):
+        log.info("should not raise", extra={reserved: "x"})

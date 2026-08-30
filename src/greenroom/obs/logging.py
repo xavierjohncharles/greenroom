@@ -105,5 +105,53 @@ def configure_logging(level: int = logging.INFO) -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
+# Attributes the stdlib puts on every LogRecord. Passing any of these in `extra=`
+# raises KeyError inside Logger.makeRecord — which means a log line can 500 a request.
+# We hit exactly that in production with extra={"created": n}: `created` is the record's
+# own timestamp. Observability must never break the request path, so collisions are
+# renamed rather than raised.
+_RESERVED_LOG_KEYS = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "message",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+    }
+)
+
+
+class SafeExtraLogger(logging.Logger):
+    """A Logger that renames reserved keys in `extra` instead of raising on them."""
+
+    def makeRecord(
+        self, name, level, fn, lno, msg, args, exc_info, func=None, extra=None, sinfo=None
+    ):
+        if extra:
+            extra = {(f"x_{k}" if k in _RESERVED_LOG_KEYS else k): v for k, v in extra.items()}
+        return super().makeRecord(name, level, fn, lno, msg, args, exc_info, func, extra, sinfo)
+
+
+logging.setLoggerClass(SafeExtraLogger)
+
+
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)

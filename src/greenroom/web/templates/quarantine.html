@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Quarantine — Greenroom{% endblock %}
+{% block content %}
+<h1>Quarantine</h1>
+<p class="sub">Inbound mail the Gatekeeper refused to pass on, and why.</p>
+{% if messages %}
+{% for m in messages %}
+<div class="card">
+  <div class="row">
+    <strong>{{ m.subject or '(no subject)' }}</strong>
+    <span class="pill escalated">quarantined</span>
+    <span class="muted" style="margin-left:auto">{{ m.created_at.strftime('%d %b %H:%M') }}</span>
+  </div>
+  <div class="muted mono" style="margin-top:4px">from {{ m.from_addr }}</div>
+  <div class="warn" style="margin-top:10px">
+    {{ m.quarantine_reason }}
+    {% if m.injection_flags %}<div class="mono" style="margin-top:6px">flags: {{ m.injection_flags|join(', ') }}</div>{% endif %}
+  </div>
+  <details style="margin-top:10px">
+    <summary class="muted">Show the raw message (never passed to any other agent)</summary>
+    <div class="email" style="margin-top:8px; border-left-color: var(--magenta)">{{ m.body_text }}</div>
+  </details>
+</div>
+{% endfor %}
+{% else %}
+<div class="card"><div class="empty">Nothing quarantined. The Gatekeeper lands at step 5.</div></div>
+{% endif %}
+{% endblock %}

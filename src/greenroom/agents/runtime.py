@@ -22,10 +22,18 @@ from google.adk.sessions import BaseSessionService, InMemorySessionService
 from google.genai import types
 
 from greenroom.obs import get_logger
+from greenroom.settings import get_settings
 
 log = get_logger(__name__)
 
 APP_NAME = "greenroom"
+
+# Loading settings has the side effect of exporting GOOGLE_GENAI_USE_VERTEXAI and
+# friends into os.environ, which is where the genai SDK underneath ADK looks for them.
+# Done at import of this module because every agent path goes through it: relying on
+# the web app's lifespan to do it meant scripts, workers and tests silently fell back
+# to the API-key path and failed with "No API key was provided".
+get_settings()
 
 # Sessions are ADK's own conversational scratchpad, deliberately kept separate from
 # Greenroom's durable pipeline state in Firestore. Firestore is the system of record;

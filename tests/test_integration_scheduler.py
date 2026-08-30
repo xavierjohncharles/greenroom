@@ -93,13 +93,13 @@ def _queue_pitch(queue, target_id: str):
 # ------------------------------------------------------------------ happy path
 
 
-def test_sending_a_pitch_advances_the_whole_pipeline(
+async def test_sending_a_pitch_advances_the_whole_pipeline(
     scheduler, queue, repo, seeded_target, monkeypatch
 ):
     monkeypatch.setattr("greenroom.agents.scheduler.evaluate_send_gate", _always_open)
     job = _queue_pitch(queue, seeded_target.target_id)
 
-    tally = scheduler.run_due_jobs(limit=5)
+    tally = await scheduler.run_due_jobs(limit=5)
 
     assert tally["done"] == 1
     assert queue.get(job.job_id).status == JobStatus.DONE
@@ -115,13 +115,13 @@ def test_sending_a_pitch_advances_the_whole_pipeline(
     assert scheduler.gmail.sent[0]["to"] == target.email
 
 
-def test_sending_a_pitch_queues_the_whole_follow_up_ladder(
+async def test_sending_a_pitch_queues_the_whole_follow_up_ladder(
     scheduler, queue, seeded_target, monkeypatch
 ):
     """Queued up front so a crash between follow-ups cannot lose the rest."""
     monkeypatch.setattr("greenroom.agents.scheduler.evaluate_send_gate", _always_open)
     _queue_pitch(queue, seeded_target.target_id)
-    scheduler.run_due_jobs(limit=5)
+    await scheduler.run_due_jobs(limit=5)
 
     queued = queue.list_by_status(JobStatus.QUEUED)
     kinds = sorted(j.job_type for j in queued)
@@ -132,11 +132,11 @@ def test_sending_a_pitch_queues_the_whole_follow_up_ladder(
 # ------------------------------------------------------------------ gates
 
 
-def test_nothing_sends_outside_the_send_window(scheduler, queue, repo, seeded_target):
+async def test_nothing_sends_outside_the_send_window(scheduler, queue, repo, seeded_target):
     """A job blocked by the clock is requeued, not failed."""
     job = _queue_pitch(queue, seeded_target.target_id)
 
-    tally = scheduler.run_due_jobs(limit=5, now=SATURDAY)
+    tally = await scheduler.run_due_jobs(limit=5, now=SATURDAY)
 
     assert tally["blocked"] == 1
     assert tally["done"] == 0
@@ -148,7 +148,7 @@ def test_nothing_sends_outside_the_send_window(scheduler, queue, repo, seeded_ta
     assert after.attempts == 0, "a closed window must not burn a retry attempt"
 
 
-def test_the_kill_switch_stops_a_send_that_would_otherwise_go(
+async def test_the_kill_switch_stops_a_send_that_would_otherwise_go(
     scheduler, queue, repo, seeded_target
 ):
     _queue_pitch(queue, seeded_target.target_id)
@@ -156,26 +156,28 @@ def test_the_kill_switch_stops_a_send_that_would_otherwise_go(
 
     # MONDAY_10AM is inside the send window and under the cap, so the only thing that
     # can stop this send is the kill switch.
-    tally = scheduler.run_due_jobs(limit=5, now=MONDAY_10AM)
+    tally = await scheduler.run_due_jobs(limit=5, now=MONDAY_10AM)
 
     assert tally["blocked"] == 1
     assert scheduler.gmail.sent == []
 
 
-def test_the_daily_cap_blocks_further_sends(scheduler, queue, repo, seeded_target, monkeypatch):
+async def test_the_daily_cap_blocks_further_sends(
+    scheduler, queue, repo, seeded_target, monkeypatch
+):
     monkeypatch.setattr("greenroom.agents.scheduler.evaluate_send_gate", _always_open)
     cap = get_config().policy.operations.max_sends_per_day
     for _ in range(cap):
         repo.reserve_send_slot(cap=cap)
 
     _queue_pitch(queue, seeded_target.target_id)
-    tally = scheduler.run_due_jobs(limit=5)
+    tally = await scheduler.run_due_jobs(limit=5)
 
     assert tally["blocked"] == 1
     assert scheduler.gmail.sent == []
 
 
-def test_a_failed_send_returns_its_reserved_slot(
+async def test_a_failed_send_returns_its_reserved_slot(
     scheduler, queue, repo, seeded_target, monkeypatch
 ):
     """Otherwise a flaky API would silently eat the day's send budget."""
@@ -184,7 +186,7 @@ def test_a_failed_send_returns_its_reserved_slot(
     _queue_pitch(queue, seeded_target.target_id)
 
     before = repo.sends_today()
-    tally = scheduler.run_due_jobs(limit=5)
+    tally = await scheduler.run_due_jobs(limit=5)
 
     assert tally["failed"] == 1
     assert repo.sends_today() == before, "the burnt slot must be given back"
@@ -193,14 +195,14 @@ def test_a_failed_send_returns_its_reserved_slot(
 # ------------------------------------------------------------------ follow-ups
 
 
-def test_a_follow_up_is_dropped_if_the_target_already_replied(
+async def test_a_follow_up_is_dropped_if_the_target_already_replied(
     scheduler, queue, repo, seeded_target, monkeypatch
 ):
     """The most embarrassing thing an outreach agent can do is nudge someone who
     answered yesterday."""
     monkeypatch.setattr("greenroom.agents.scheduler.evaluate_send_gate", _always_open)
     _queue_pitch(queue, seeded_target.target_id)
-    scheduler.run_due_jobs(limit=5)
+    await scheduler.run_due_jobs(limit=5)
     sent_after_pitch = len(scheduler.gmail.sent)
 
     repo.set_status(seeded_target.target_id, TargetStatus.REPLIED, reason="they answered")
@@ -212,7 +214,7 @@ def test_a_follow_up_is_dropped_if_the_target_already_replied(
                 {"run_after": datetime.now(UTC) - timedelta(seconds=1)}
             )
 
-    scheduler.run_due_jobs(limit=5)
+    await scheduler.run_due_jobs(limit=5)
 
     assert len(scheduler.gmail.sent) == sent_after_pitch, "no nudge after a reply"
 
@@ -220,7 +222,7 @@ def test_a_follow_up_is_dropped_if_the_target_already_replied(
 # ------------------------------------------------------------------ booking
 
 
-def test_booking_a_call_is_idempotent_and_marks_the_target_booked(
+async def test_booking_a_call_is_idempotent_and_marks_the_target_booked(
     scheduler, queue, repo, seeded_target
 ):
     repo.set_status(seeded_target.target_id, TargetStatus.PITCHED)
@@ -238,7 +240,7 @@ def test_booking_a_call_is_idempotent_and_marks_the_target_booked(
             },
         )
 
-    scheduler.run_due_jobs(limit=5)
+    await scheduler.run_due_jobs(limit=5)
 
     assert len(scheduler.calendar.created) == 1, "one booking, not two"
     assert repo.get_target(seeded_target.target_id).status == TargetStatus.BOOKED

@@ -17,7 +17,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from greenroom import __version__
@@ -25,6 +25,7 @@ from greenroom.config import ConfigError, get_config
 from greenroom.models import GEMINI_MODEL
 from greenroom.obs import configure_logging, get_logger
 from greenroom.settings import get_settings
+from greenroom.web.dashboard import router as dashboard_router
 
 log = get_logger(__name__)
 
@@ -130,17 +131,22 @@ async def hello() -> dict[str, Any]:
         )
 
 
-@app.get("/")
-async def index() -> dict[str, str]:
-    """Dashboard lands at step 4. Until then, a signpost."""
-    return {
-        "service": "greenroom",
-        "version": __version__,
-        "dashboard": "coming at build step 4",
-        "health": "/health",
-        "ready": "/readyz",
-        "round_trip_proof": "/hello",
-    }
+@app.post("/tick")
+async def tick(request: Request) -> dict[str, Any]:
+    """Cloud Scheduler's heartbeat: run whatever is due.
+
+    Full tick behaviour — follow-ups, veto expiry, the morning brief — lands at step 7.
+    For now it drains the job queue, which is what makes the dashboard's Approve button
+    actually result in an email.
+    """
+    from greenroom.web.deps import get_scheduler
+
+    tally = await get_scheduler().run_due_jobs(limit=int(request.query_params.get("limit", 10)))
+    log.info("tick complete", extra=tally)
+    return {"status": "ok", **tally}
+
+
+app.include_router(dashboard_router)
 
 
 if __name__ == "__main__":  # local convenience; Cloud Run uses the Dockerfile CMD

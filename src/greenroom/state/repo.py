@@ -20,6 +20,8 @@ from greenroom.state.machine import assert_transition
 from greenroom.state.models import (
     DecisionDoc,
     DecisionKind,
+    DraftDoc,
+    DraftStatus,
     EventDoc,
     TargetDoc,
     TargetStatus,
@@ -155,6 +157,65 @@ class Repo:
         The Gmail read tools take this set and refuse anything outside it.
         """
         return frozenset(s.id for s in self._col("threads").stream())
+
+    # -- drafts ------------------------------------------------------------
+    def create_draft(self, draft: DraftDoc) -> DraftDoc:
+        self._col("drafts").document(draft.draft_id).set(draft.model_dump())
+        log.info(
+            "draft created",
+            extra={
+                "target_id": draft.target_id,
+                "draft_id": draft.draft_id,
+                "mode": str(draft.mode_at_draft),
+                "escalation": draft.is_escalation,
+            },
+        )
+        return draft
+
+    def get_draft(self, draft_id: str) -> DraftDoc | None:
+        snapshot = self._col("drafts").document(draft_id).get()
+        return DraftDoc.model_validate(snapshot.to_dict()) if snapshot.exists else None
+
+    def list_drafts(
+        self, *, status: DraftStatus | None = None, target_id: str | None = None, limit: int = 100
+    ) -> list[DraftDoc]:
+        from google.cloud import firestore
+
+        query = self._col("drafts")
+        if status is not None:
+            query = query.where(filter=firestore.FieldFilter("status", "==", str(status)))
+        if target_id is not None:
+            query = query.where(filter=firestore.FieldFilter("target_id", "==", target_id))
+        drafts = [DraftDoc.model_validate(s.to_dict()) for s in query.limit(limit).stream()]
+        return sorted(drafts, key=lambda d: d.created_at, reverse=True)
+
+    def resolve_draft(
+        self,
+        draft_id: str,
+        *,
+        status: DraftStatus,
+        subject: str | None = None,
+        body: str | None = None,
+    ) -> DraftDoc:
+        """Record a human's verdict on a draft.
+
+        The original text is never overwritten: `original_body` is what the agent wrote
+        and `body` is what will actually send. The difference between them is the entire
+        training signal for the trust dial and the style memo, so losing it would cost
+        the feature its input.
+        """
+        doc_ref = self._col("drafts").document(draft_id)
+        update: dict[str, Any] = {
+            "status": str(status),
+            "resolved_at": utcnow(),
+            "updated_at": utcnow(),
+        }
+        if subject is not None:
+            update["subject"] = subject
+        if body is not None:
+            update["body"] = body
+        doc_ref.update(update)
+        return DraftDoc.model_validate(doc_ref.get().to_dict())
 
     # -- decisions ---------------------------------------------------------
     def record_decision(

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Unlock — Greenroom{% endblock %}
+{% block content %}
+<h1>Unlock</h1>
+<p class="sub">Demo gate. A single shared secret, documented as such — this is not authentication.</p>
+<div class="card">
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label class="muted">Shared secret</label>
+    <input type="password" name="secret" autofocus>
+    <div style="margin-top:12px"><button class="primary">Unlock</button></div>
+    {% if error %}<div class="warn" style="margin-top:12px">{{ error }}</div>{% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -15,6 +15,8 @@ the system that can cause an email to leave the building.
 
 from __future__ import annotations
 
+import inspect
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -22,10 +24,13 @@ from typing import Any
 from greenroom.config import AppConfig
 from greenroom.obs import get_logger, set_log_context
 from greenroom.state.models import (
+    DraftDoc,
+    DraftStatus,
     JobDoc,
     JobType,
     TargetStatus,
     ThreadDoc,
+    TrustMode,
     utcnow,
 )
 from greenroom.state.repo import Repo, evaluate_send_gate
@@ -55,7 +60,9 @@ class Scheduler:
         self.calendar = calendar
         self.dry_run = dry_run
 
-        self._handlers: dict[JobType, Callable[[JobDoc], dict]] = {
+        self._handlers: dict[JobType, Callable[[JobDoc], Any]] = {
+            JobType.RESEARCH_TARGET: self._handle_research_target,
+            JobType.DRAFT_PITCH: self._handle_draft_pitch,
             JobType.SEND_PITCH: self._handle_send_pitch,
             JobType.SEND_REPLY: self._handle_send_reply,
             JobType.SEND_FOLLOW_UP: self._handle_send_follow_up,
@@ -65,7 +72,7 @@ class Scheduler:
         }
 
     # -- the loop ----------------------------------------------------------
-    def run_due_jobs(self, *, limit: int = 10, now: datetime | None = None) -> dict[str, int]:
+    async def run_due_jobs(self, *, limit: int = 10, now: datetime | None = None) -> dict[str, int]:
         """Claim and run up to `limit` due jobs. Returns a tally for the tick log."""
         now = now or utcnow()
         tally = {"claimed": 0, "done": 0, "failed": 0, "blocked": 0}
@@ -83,6 +90,10 @@ class Scheduler:
 
             try:
                 result = handler(job)
+                # Handlers that drive an ADK agent are coroutines; the plain ones are
+                # not. Awaiting conditionally keeps both kinds in one registry.
+                if inspect.isawaitable(result):
+                    result = await result
             except SendBlocked as exc:
                 # Not a failure: the world simply is not ready yet. Put it back
                 # without burning an attempt against max_attempts.
@@ -135,13 +146,114 @@ class Scheduler:
     def _release(self) -> None:
         self.repo.release_send_slot(tz=self.config.policy.operations.send_window.timezone)
 
-    # -- handlers ----------------------------------------------------------
-    def _handle_send_pitch(self, job: JobDoc) -> dict:
-        """Send the first email to a target and open its thread."""
-        self._assert_may_send()
+    # -- handlers: reasoning -----------------------------------------------
+    async def _handle_research_target(self, job: JobDoc) -> dict:
+        """Run the Researcher, store the result, and queue the draft."""
+        from greenroom.agents.researcher import research
+
+        target = self._require_target(job)
+        doc = await research(target)
+
+        self.repo._col("targets").document(target.target_id).update(
+            {"research": doc.model_dump(), "updated_at": utcnow()}
+        )
+        self.repo.set_status(target.target_id, TargetStatus.RESEARCHED, reason="research complete")
+
+        self.queue.enqueue(
+            job_type=JobType.DRAFT_PITCH,
+            idempotency_key=f"draft_pitch:{target.target_id}",
+            target_id=target.target_id,
+        )
+        return {"confidence": doc.confidence, "has_hook": bool(doc.best_hook)}
+
+    async def _handle_draft_pitch(self, job: JobDoc) -> dict:
+        """Run the Writer, then route the draft according to the target's trust mode.
+
+        This is the trust dial's teeth. In `review` nothing is queued at all — the draft
+        waits on the dashboard. In `veto` a send job is queued for 30 minutes' time and
+        can still be stopped. Only `autopilot` queues an immediate send.
+        """
+        from greenroom.agents.schemas import ResearchDoc
+        from greenroom.agents.writer import write_pitch
+
+        target = self._require_target(job)
+        research_doc = ResearchDoc.model_validate(target.research) if target.research else None
+
+        draft, problems = await write_pitch(
+            target=target,
+            research=research_doc,
+            config=self.config,
+            decisions=self.repo.recent_decisions(limit=10),
+            style_memo=self._style_memo(),
+        )
+
+        mode = TrustMode(target.mode)
+        # A draft that breaks a hard copy rule goes to a human regardless of mode. Earned
+        # autonomy is permission to skip review, not permission to send something broken.
+        if problems:
+            mode = TrustMode.REVIEW
+
+        doc = DraftDoc(
+            draft_id=uuid.uuid4().hex,
+            target_id=target.target_id,
+            kind="pitch",
+            subject=draft.subject,
+            body=draft.body,
+            original_subject=draft.subject,
+            original_body=draft.body,
+            mode_at_draft=mode,
+            copy_problems=problems,
+            hook_used=draft.hook_used,
+            reasoning=draft.reasoning,
+            auto_send_at=(
+                utcnow() + timedelta(minutes=self.config.policy.operations.veto_window_minutes)
+                if mode == TrustMode.VETO
+                else None
+            ),
+        )
+        self.repo.create_draft(doc)
+
+        if mode == TrustMode.AUTOPILOT:
+            self.enqueue_send_for_draft(doc)
+            self.repo.resolve_draft(doc.draft_id, status=DraftStatus.APPROVED)
+
+        return {
+            "draft_id": doc.draft_id,
+            "mode": str(mode),
+            "problems": problems,
+            "words": len(draft.body.split()),
+        }
+
+    def enqueue_send_for_draft(self, draft: DraftDoc) -> str:
+        """Turn an approved draft into a send job.
+
+        The idempotency key is the draft id, so approving twice — a double-clicked
+        button, a retried request — produces one email.
+        """
+        job, _ = self.queue.enqueue(
+            job_type=JobType.SEND_PITCH if draft.kind == "pitch" else JobType.SEND_REPLY,
+            idempotency_key=f"send:{draft.draft_id}",
+            target_id=draft.target_id,
+            thread_id=draft.thread_id,
+            payload={"subject": draft.subject, "body": draft.body, "draft_id": draft.draft_id},
+        )
+        return job.job_id
+
+    def _style_memo(self) -> str:
+        snapshot = self.repo._col("control").document("style_memo").get()
+        return str((snapshot.to_dict() or {}).get("memo", "")) if snapshot.exists else ""
+
+    def _require_target(self, job: JobDoc):
         target = self.repo.get_target(job.target_id or "")
         if target is None:
             raise RuntimeError(f"target {job.target_id} not found")
+        return target
+
+    # -- handlers: side effects --------------------------------------------
+    def _handle_send_pitch(self, job: JobDoc) -> dict:
+        """Send the first email to a target and open its thread."""
+        self._assert_may_send()
+        target = self._require_target(job)
 
         subject = job.payload["subject"]
         body = job.payload["body"]
@@ -167,6 +279,17 @@ class Scheduler:
         )
         self.repo.set_status(target.target_id, TargetStatus.PITCHED, reason="pitch sent")
         self._schedule_follow_ups(target_id=target.target_id, thread_id=sent.thread_id)
+
+        draft_id = job.payload.get("draft_id")
+        if draft_id:
+            self.repo._col("drafts").document(draft_id).update(
+                {
+                    "status": DraftStatus.SENT.value,
+                    "thread_id": sent.thread_id,
+                    "sent_message_id": sent.message_id,
+                    "updated_at": utcnow(),
+                }
+            )
 
         return {"message_id": sent.message_id, "thread_id": sent.thread_id, "dry_run": sent.dry_run}
 

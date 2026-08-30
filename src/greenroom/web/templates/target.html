@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ target.organisation }} — Greenroom{% endblock %}
+{% block content %}
+<p class="muted"><a href="/" style="color:inherit">← Board</a></p>
+<h1>{{ target.organisation }}</h1>
+<p class="sub">
+  <span class="mono">{{ target.email }}</span> ·
+  <span class="pill {{ 'booked' if target.status=='booked' else ('escalated' if target.status=='escalated' else '') }}">{{ target.status.replace('_',' ') }}</span>
+  <span class="pill {{ target.mode }}">{{ target.mode }}</span>
+  {% if target.clean_approvals %}· {{ target.clean_approvals }} clean approval(s) toward promotion{% endif %}
+</p>
+
+{% if research %}
+<div class="card">
+  <h2 style="margin-top:0">What the Researcher found</h2>
+  {% if research.best_hook %}
+    <div class="email" style="border-left-color: var(--magenta)">{{ research.best_hook }}</div>
+    {% if research.hook_source %}<div class="muted mono" style="margin-top:6px">{{ research.hook_source }}</div>{% endif %}
+  {% else %}
+    <div class="warn">No specific hook found — the Writer was told to open plainly rather than invent one.</div>
+  {% endif %}
+  <table style="margin-top:12px">
+    {% if research.venue_name %}<tr><th>Venue</th><td>{{ research.venue_name }} {{ research.venue_capacity }}</td></tr>{% endif %}
+    {% if research.venue_ownership %}<tr><th>Run by</th><td>{{ research.venue_ownership }}</td></tr>{% endif %}
+    {% if research.events_programme %}<tr><th>Programme</th><td>{{ research.events_programme }}</td></tr>{% endif %}
+    {% if research.freshers_timing %}<tr><th>Freshers</th><td>{{ research.freshers_timing }}</td></tr>{% endif %}
+    <tr><th>Confidence</th><td>{{ research.confidence }}</td></tr>
+  </table>
+</div>
+{% endif %}
+
+{% for d in drafts %}
+<div class="card">
+  <div class="row">
+    <strong>{{ d.kind }} draft</strong>
+    <span class="pill {{ d.mode_at_draft }}">{{ d.status }}</span>
+    {% if d.is_escalation %}<span class="pill escalated">escalation</span>{% endif %}
+    <span class="muted" style="margin-left:auto">{{ d.created_at.strftime('%d %b %H:%M') }}</span>
+  </div>
+
+  {% if d.is_escalation %}
+    <div class="warn" style="margin-top:10px">
+      <strong>Outside policy.</strong> {{ d.escalation_reason }}
+      {% if d.policy_rule %}<div class="mono" style="margin-top:6px">breaches: {{ d.policy_rule }}</div>{% endif %}
+    </div>
+  {% endif %}
+
+  {% if d.copy_problems %}
+    <div class="warn" style="margin-top:10px">Held for review: {{ d.copy_problems|join('; ') }}</div>
+  {% endif %}
+
+  {% if d.auto_send_at and d.status == 'pending' %}
+    <div class="warn" style="margin-top:10px; background:#FFF6E0; border-color:#C99A16; color:#7A5D06">
+      Veto window: sends itself at {{ d.auto_send_at.strftime('%H:%M') }} unless you stop it.
+    </div>
+  {% endif %}
+
+  {% if d.status == 'pending' %}
+  <form method="post" action="/target/{{ target.target_id }}/draft/{{ d.draft_id }}" style="margin-top:12px">
+    <label class="muted">Subject</label>
+    <input type="text" name="subject" value="{{ d.subject }}">
+    <label class="muted" style="display:block; margin-top:10px">Body</label>
+    <textarea name="body">{{ d.body }}</textarea>
+    {% if d.reasoning %}<div class="muted" style="margin-top:8px">Why this angle: {{ d.reasoning }}</div>{% endif %}
+    <div class="row" style="margin-top:12px">
+      <button class="primary" name="action" value="approve">Approve &amp; send</button>
+      <button name="action" value="edit">Save edit &amp; send</button>
+      <button class="danger" name="action" value="reject">Reject</button>
+    </div>
+    <div class="muted" style="margin-top:8px">
+      Editing demotes this target one trust level. Approving unchanged counts toward promotion.
+    </div>
+  </form>
+  {% else %}
+    <div style="margin-top:10px"><strong>{{ d.subject }}</strong></div>
+    <div class="email" style="margin-top:8px">{{ d.body }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if messages %}
+<h2>Thread</h2>
+{% for m in messages %}
+<div class="card">
+  <div class="row">
+    <span class="pill">{{ m.direction }}</span>
+    <strong>{{ m.subject }}</strong>
+    {% if m.intent %}<span class="pill">{{ m.intent }}</span>{% endif %}
+    {% if m.quarantined %}<span class="pill escalated">quarantined</span>{% endif %}
+    <span class="muted" style="margin-left:auto">{{ m.created_at.strftime('%d %b %H:%M') }}</span>
+  </div>
+  <div class="email" style="margin-top:10px">{{ m.body_text }}</div>
+</div>
+{% endfor %}
+{% endif %}
+
+<h2>Trace</h2>
+<div class="card">
+{% if events %}
+<table>
+  {% for e in events %}
+  <tr>
+    <td class="mono" style="width:130px">{{ e.created_at.strftime('%d %b %H:%M:%S') }}</td>
+    <td><strong>{{ e.kind }}</strong>
+      {% if e.detail %}<div class="muted mono">{{ e.detail }}</div>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<div class="empty">Nothing yet.</div>{% endif %}
+</div>
+{% endblock %}

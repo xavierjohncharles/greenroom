@@ -50,6 +50,7 @@ TRUST_LADDER: tuple[TrustMode, ...] = (TrustMode.REVIEW, TrustMode.VETO, TrustMo
 
 class JobType(StrEnum):
     RESEARCH_TARGET = "research_target"
+    DRAFT_PITCH = "draft_pitch"
     GENERATE_POSTER = "generate_poster"
     SEND_PITCH = "send_pitch"
     SEND_REPLY = "send_reply"
@@ -83,6 +84,21 @@ class Intent(StrEnum):
     DECLINE = "decline"
     OUT_OF_OFFICE = "out_of_office"
     UNRELATED = "unrelated"
+
+
+class DraftStatus(StrEnum):
+    """A draft's journey past a human.
+
+    `pending` is the whole point of review mode: nothing leaves the building while a
+    draft sits here.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    EDITED = "edited"
+    REJECTED = "rejected"
+    SENT = "sent"
+    EXPIRED = "expired"  # a veto window elapsed and it sent itself
 
 
 class DecisionKind(StrEnum):
@@ -211,6 +227,43 @@ class DecisionDoc(FirestoreDoc):
     draft_after: str = ""
     diff: str = ""
     note: str = ""
+
+
+class DraftDoc(FirestoreDoc):
+    """An email waiting on a human, or recently past one.
+
+    Kept as its own document rather than as a job payload so the dashboard has
+    something stable to render and edit, and so the approval history survives the job
+    being completed.
+    """
+
+    draft_id: str
+    target_id: str
+    thread_id: str | None = None
+    kind: str = "pitch"  # "pitch" | "reply" | "follow_up"
+
+    subject: str = ""
+    body: str = ""
+    # What the agent originally wrote, preserved even after a human edits `body`.
+    original_subject: str = ""
+    original_body: str = ""
+
+    status: DraftStatus = DraftStatus.PENDING
+    mode_at_draft: TrustMode = TrustMode.REVIEW
+    copy_problems: list[str] = Field(default_factory=list)
+
+    hook_used: str = ""
+    reasoning: str = ""
+
+    # Set when mode is veto: the moment this sends itself unless stopped.
+    auto_send_at: datetime | None = None
+    # Escalations are always review, whatever the target's mode says.
+    is_escalation: bool = False
+    escalation_reason: str = ""
+    policy_rule: str = ""
+
+    resolved_at: datetime | None = None
+    sent_message_id: str | None = None
 
 
 class EventDoc(FirestoreDoc):

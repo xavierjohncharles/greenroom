@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Settings — Greenroom{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<p class="sub">Everything here takes effect immediately, without a redeploy.</p>
+
+<div class="card">
+  <h2 style="margin-top:0">Kill switch</h2>
+  <p class="muted">Checked before every send, ahead of the window and the cap. Nothing bypasses it.</p>
+  <form method="post" action="/settings/pause">
+    {% if paused %}
+      <div class="warn" style="margin-bottom:12px">Currently paused: {{ pause_reason }}</div>
+      <button class="primary" name="paused" value="false">Resume sending</button>
+    {% else %}
+      <input type="text" name="reason" placeholder="Why are you pausing? (shown on every page)">
+      <div style="margin-top:10px"><button class="danger" name="paused" value="true">Pause everything</button></div>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Trust mode per target</h2>
+  <p class="muted">Escalations always go to review, whatever this says.</p>
+  <table>
+    <tr><th>Organisation</th><th>Status</th><th>Mode</th><th></th></tr>
+    {% for t in targets %}
+    <tr>
+      <td>{{ t.organisation }}</td>
+      <td class="muted">{{ t.status.replace('_',' ') }}</td>
+      <td><span class="pill {{ t.mode }}">{{ t.mode }}</span></td>
+      <td>
+        <form method="post" action="/settings/mode" class="row">
+          <input type="hidden" name="target_id" value="{{ t.target_id }}">
+          {% for m in ['review','veto','autopilot'] %}
+            {% if m != t.mode %}<button name="mode" value="{{ m }}">{{ m }}</button>{% endif %}
+          {% endfor %}
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Today</h2>
+  <table>
+    <tr><th>Sends used</th><td>{{ sends_today }} / {{ send_cap }}</td></tr>
+    <tr><th>Send window</th><td>{{ 'open' if window_open else window_reason }}</td></tr>
+    <tr><th>Dry run</th><td>{{ 'yes — nothing is delivered' if dry_run else 'no — sends are real' }}</td></tr>
+    <tr><th>Model</th><td class="mono">{{ model }}</td></tr>
+  </table>
+</div>
+{% endblock %}

@@ -37,6 +37,24 @@ First customer: **Beat ID Ltd**, pitching its real pipeline of UK students' unio
 | [`/health`](https://greenroom-29925954133.europe-west2.run.app/health) | Container up, config validated, model constant |
 | [`/readyz`](https://greenroom-29925954133.europe-west2.run.app/readyz) | Firestore reachable from the service |
 | [`/hello`](https://greenroom-29925954133.europe-west2.run.app/hello) | ADK → Gemini 3.5 Flash on Vertex AI |
+| `/` | The dashboard — pipeline board, drafts, quarantine, settings (behind the demo gate) |
+
+## Agents
+
+| Agent | Tools it holds | Tools it does *not* hold |
+|---|---|---|
+| **Researcher** | Google Search grounding, URL context | anything that sends, books, or writes state |
+| **Writer** | *none* | everything |
+| **Gatekeeper** (step 5) | none — screens inbound before any other agent sees it | everything |
+| **Negotiator** (step 5) | read policy, read thread, draft, propose slots | send. It emits a job; it never delivers. |
+| **Scheduler** | Gmail send, Calendar create/freebusy | reasoning — it is deterministic by design |
+
+Tool scoping is structural. The read side is not *discouraged* from sending; it is handed
+no send tool, so there is nothing for a prompt injection to reach for.
+
+The Scheduler is deliberately not an `LlmAgent`. It decides whether the clock says 09:00
+and whether a counter is under 25 — a language model there would add latency, cost and
+non-determinism to the one component whose entire job is predictability.
 
 ## Google Cloud footprint
 

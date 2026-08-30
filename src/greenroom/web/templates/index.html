@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Pipeline — Greenroom{% endblock %}
+{% block content %}
+<h1>Pipeline</h1>
+<p class="sub">{{ total }} targets · {{ sends_today }}/{{ send_cap }} sends today ·
+  {% if window_open %}send window open{% else %}{{ window_reason }}{% endif %}</p>
+
+<div class="grid">
+  {% for status, count in counts %}
+  <div class="stat">
+    <div class="n">{{ count }}</div>
+    <div class="k">{{ status.replace('_', ' ') }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if pending %}
+<h2>Waiting on you ({{ pending|length }})</h2>
+{% for d in pending %}
+<div class="card">
+  <div class="row">
+    <a class="tgt" href="/target/{{ d.target_id }}">{{ d.organisation }}</a>
+    <span class="pill {{ d.mode_at_draft }}">{{ d.mode_at_draft }}</span>
+    {% if d.is_escalation %}<span class="pill escalated">escalation</span>{% endif %}
+    <span class="muted" style="margin-left:auto">{{ d.created_at.strftime('%d %b %H:%M') }}</span>
+  </div>
+  <div class="muted" style="margin-top:6px">{{ d.subject }}</div>
+  {% if d.copy_problems %}
+    <div class="warn" style="margin-top:8px">Held for review: {{ d.copy_problems|join('; ') }}</div>
+  {% endif %}
+  <div style="margin-top:10px"><a class="btn" href="/target/{{ d.target_id }}">Review draft →</a></div>
+</div>
+{% endfor %}
+{% endif %}
+
+<h2>All targets</h2>
+<div class="card">
+{% if targets %}
+<table>
+  <tr><th>Organisation</th><th>Status</th><th>Mode</th><th>Last change</th></tr>
+  {% for t in targets %}
+  <tr>
+    <td><a class="tgt" href="/target/{{ t.target_id }}">{{ t.organisation }}</a>
+        <div class="muted mono">{{ t.email }}</div></td>
+    <td><span class="pill {{ 'booked' if t.status=='booked' else ('escalated' if t.status=='escalated' else '') }}">{{ t.status.replace('_',' ') }}</span></td>
+    <td><span class="pill {{ t.mode }}">{{ t.mode }}</span></td>
+    <td class="muted">{{ t.last_status_change.strftime('%d %b %H:%M') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<div class="empty">No targets yet. Run <span class="mono">POST /admin/sync-targets</span> to load
+  <span class="mono">config/targets.csv</span>.</div>
+{% endif %}
+</div>
+{% endblock %}

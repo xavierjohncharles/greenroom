@@ -232,3 +232,68 @@ wrong reason first: a Saturday fixture dated *before* the jobs it was meant to b
 nothing was ever claimed and "blocked" was trivially zero; and a kill-switch test that
 never enqueued a job at all. Both would have shipped as green ticks over a feature that
 did not work.
+
+---
+
+## Sun 30 Aug — Step 4: Researcher, Writer, dashboard, review mode
+
+The full loop runs on Cloud Run: sync targets → Researcher → Writer → draft pending on
+the dashboard → approve → send job queued. 105 tests.
+
+**The one API question that decided the architecture.** In ADK 1.x, `output_schema` and
+`tools` were mutually exclusive, which would have forced the Researcher into two agents
+— one to search, one to reformat into JSON. I tested the combination on 2.8.0 with a
+real call rather than trusting either the docs or my memory of 1.x, and it works. The
+Researcher is one agent that grounds with Google Search and returns typed fields
+directly. Five minutes of checking saved an unnecessary agent and a whole handoff.
+
+**Anti-hallucination held under real conditions, and I have proof by accident.** The
+targets.csv still contains placeholder rows pointing at domains that do not exist. The
+Researcher found nothing, reported `confidence: low` and an empty hook — and the Writer,
+told never to invent one, opened with "I could not find a specific recent update on your
+programming". That is exactly right. An outreach agent that invents a plausible-sounding
+detail about a real students' union is worse than useless, and the failure mode is
+invisible until someone at the union reads it.
+
+**Copy rules are enforced in code, not in the prompt.** "Never use this phrase" is a rule
+a model obeys most of the time, and most of the time is not good enough for something
+going out under the founder's name. `validate_draft` checks word count, banned phrases,
+empty fields, and that a first-contact email quotes no fee. A draft that fails any of
+them is forced to `review` mode regardless of how much autonomy that target has earned —
+earned autonomy is permission to skip review, not permission to send something broken.
+
+**The Writer needed one round of tuning and it was worth it.** The first draft opened by
+reciting the research note verbatim: "I saw that your regular student mashup club night
+'Club Sandwich' hosted by DJ Shinzee remains a legendary campus institution at RISE,
+famously offering entry and three drinks for under a tenner." True, sourced, and
+obviously machine-written. The instruction now carries a worked good/bad example, and
+the same hook came back as "Club Sandwich with DJ Shinzee has been a legendary fixture at
+RISE for ages" inside a 138-word email. The hook is not the point; sounding like a person
+who knows the place is the point.
+
+**Two production bugs found by deploying rather than by testing:**
+
+1. **`extra={"created": n}` returned a 500.** `created` is a reserved `LogRecord`
+   attribute and passing it raises `KeyError` inside `Logger.makeRecord` — so a *log
+   line* took down `/admin/sync-targets`. Fixed at the class level rather than the call
+   site: `SafeExtraLogger` renames any reserved key instead of raising, because
+   observability must never be able to break the request path. There is a regression
+   test over the whole reserved set.
+
+2. **Starlette 1.x removed the old `TemplateResponse(name, context)` signature.** Every
+   dashboard page failed with `TypeError: unhashable type: 'dict'` until the request
+   moved to the first argument. Worth noting that a stale idiom fails loudly here — but
+   only when something actually renders a template, which no unit test did until I
+   added one.
+
+Also spent ten minutes convinced `include_router` was broken because the dashboard routes
+never appeared in `app.routes`. They were registered fine: this FastAPI version wraps an
+included router in a single `_IncludedRouter` object rather than flattening its routes.
+The introspection was wrong, not the wiring. Lesson: test the behaviour (hit the URL),
+not the representation.
+
+**The best demo moment so far was an accident.** Approving a draft at 01:21 on a Sunday
+queued the send, and the Scheduler refused it: *"Sunday is outside the send window
+(weekdays only)"* — requeued for later, with the attempt counter untouched. The guardrail
+is not a slide in the deck; it is observable on the live service, and it is the answer to
+"what stops it emailing a students' union at 3am?"

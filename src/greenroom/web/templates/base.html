@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Greenroom{% endblock %}</title>
+<style>
+  :root {
+    --magenta: #D30D4F;
+    --cyan: #22D3EE;
+    --cream: #FAF8F2;
+    --ink: #14121A;
+    --muted: #6B6875;
+    --line: #E4E0D6;
+    --card: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--cream); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    background: var(--ink); color: var(--cream);
+    padding: 14px 20px; display: flex; align-items: center; gap: 16px;
+    flex-wrap: wrap; position: sticky; top: 0; z-index: 10;
+  }
+  header .logo { font-weight: 700; letter-spacing: -0.02em; }
+  header .logo span { color: var(--magenta); }
+  header nav { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+  header a { color: var(--cream); text-decoration: none; opacity: .75; font-size: 14px; }
+  header a:hover, header a.on { opacity: 1; border-bottom: 2px solid var(--cyan); }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 16px; margin: 28px 0 10px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .stat .n { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; }
+  .stat .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .pill {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; border: 1px solid var(--line); background: #F3F1EA;
+  }
+  .pill.review { background: #FDE9EF; border-color: var(--magenta); color: var(--magenta); }
+  .pill.veto { background: #FFF6E0; border-color: #C99A16; color: #7A5D06; }
+  .pill.autopilot { background: #E4FAFE; border-color: var(--cyan); color: #0A6D80; }
+  .pill.escalated { background: var(--magenta); color: #fff; border-color: var(--magenta); }
+  .pill.booked { background: #E6F7EC; border-color: #2E9E5B; color: #17673A; }
+  a.tgt { color: var(--ink); text-decoration: none; font-weight: 600; }
+  a.tgt:hover { color: var(--magenta); }
+  .muted { color: var(--muted); font-size: 13px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  button, .btn {
+    font: inherit; font-weight: 600; padding: 9px 15px; border-radius: 8px;
+    border: 1px solid var(--line); background: #fff; cursor: pointer; text-decoration: none;
+    color: var(--ink); display: inline-block;
+  }
+  button.primary { background: var(--magenta); border-color: var(--magenta); color: #fff; }
+  button.ghost { background: transparent; }
+  button.danger { border-color: var(--magenta); color: var(--magenta); }
+  textarea, input[type=text], input[type=password] {
+    width: 100%; font: inherit; padding: 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; color: var(--ink);
+  }
+  textarea { min-height: 220px; resize: vertical; line-height: 1.55; }
+  .email { white-space: pre-wrap; background: #FCFBF7; border-left: 3px solid var(--cyan);
+           padding: 12px 14px; border-radius: 0 8px 8px 0; }
+  .warn { background: #FDE9EF; border: 1px solid var(--magenta); color: #8A0A34;
+          padding: 10px 12px; border-radius: 8px; font-size: 13.5px; }
+  .paused { background: var(--magenta); color: #fff; padding: 8px 20px; font-weight: 600; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 9px 6px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+  @media (max-width: 600px) { main { padding: 14px; } .grid { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Beat<span>ID</span> Greenroom</div>
+  <nav>
+    <a href="/" class="{{ 'on' if nav=='board' }}">Board</a>
+    <a href="/drafts" class="{{ 'on' if nav=='drafts' }}">Drafts{% if pending_count %} ({{ pending_count }}){% endif %}</a>
+    <a href="/quarantine" class="{{ 'on' if nav=='quarantine' }}">Quarantine</a>
+    <a href="/settings" class="{{ 'on' if nav=='settings' }}">Settings</a>
+  </nav>
+</header>
+{% if paused %}<div class="paused">PAUSED — nothing will send. {{ pause_reason }}</div>{% endif %}
+{% if dry_run %}<div class="paused" style="background:#7A5D06">DRY RUN — sends are logged, not delivered.</div>{% endif %}
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>
