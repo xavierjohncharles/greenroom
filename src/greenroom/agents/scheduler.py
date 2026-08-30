@@ -23,6 +23,7 @@ from typing import Any
 
 from greenroom.config import AppConfig
 from greenroom.obs import get_logger, set_log_context
+from greenroom.settings import get_settings
 from greenroom.state.models import (
     DraftDoc,
     DraftStatus,
@@ -62,6 +63,7 @@ class Scheduler:
 
         self._handlers: dict[JobType, Callable[[JobDoc], Any]] = {
             JobType.RESEARCH_TARGET: self._handle_research_target,
+            JobType.GENERATE_POSTER: self._handle_generate_poster,
             JobType.DRAFT_PITCH: self._handle_draft_pitch,
             JobType.SEND_PITCH: self._handle_send_pitch,
             JobType.SEND_REPLY: self._handle_send_reply,
@@ -159,12 +161,40 @@ class Scheduler:
         )
         self.repo.set_status(target.target_id, TargetStatus.RESEARCHED, reason="research complete")
 
+        # Poster and draft are independent: a failed poster must not block the pitch.
+        # An email with no poster is a slightly plainer email; an email that never sends
+        # because an image model was busy is a lost target.
+        self.queue.enqueue(
+            job_type=JobType.GENERATE_POSTER,
+            idempotency_key=f"poster:{target.target_id}",
+            target_id=target.target_id,
+        )
         self.queue.enqueue(
             job_type=JobType.DRAFT_PITCH,
             idempotency_key=f"draft_pitch:{target.target_id}",
             target_id=target.target_id,
         )
         return {"confidence": doc.confidence, "has_hook": bool(doc.best_hook)}
+
+    def _handle_generate_poster(self, job: JobDoc) -> dict:
+        """Generate the poster and record it on the target."""
+        from greenroom.tools.images import make_poster
+
+        target = self._require_target(job)
+        research = target.research or {}
+
+        poster = make_poster(
+            target_id=target.target_id,
+            organisation=target.organisation,
+            venue=research.get("venue_name", "") or target.venue_notes[:40],
+            # Passed whole: the prompt module decides whether it fits or falls back.
+            date_line=research.get("freshers_timing", ""),
+            dry_run=self.dry_run,
+        )
+        self.repo._col("targets").document(target.target_id).update(
+            {"poster_url": poster.public_url or poster.gcs_uri, "updated_at": utcnow()}
+        )
+        return {"model": poster.model, "bytes": len(poster.png), "uri": poster.gcs_uri}
 
     async def _handle_draft_pitch(self, job: JobDoc) -> dict:
         """Run the Writer, then route the draft according to the target's trust mode.
@@ -258,9 +288,16 @@ class Scheduler:
         subject = job.payload["subject"]
         body = job.payload["body"]
 
+        # Attach the poster if one was generated. Fetched at send time rather than held
+        # in the job payload, so a re-run picks up the current poster and the job
+        # documents stay small.
+        attachments = self._poster_attachment(target)
+
         self._reserve()
         try:
-            sent = self.gmail.send_new(to=target.email, subject=subject, body_text=body)
+            sent = self.gmail.send_new(
+                to=target.email, subject=subject, body_text=body, attachments=attachments
+            )
         except Exception:
             self._release()
             raise
@@ -292,6 +329,21 @@ class Scheduler:
             )
 
         return {"message_id": sent.message_id, "thread_id": sent.thread_id, "dry_run": sent.dry_run}
+
+    def _poster_attachment(self, target) -> list[tuple[str, bytes, str]]:
+        """Read the stored poster back for attaching. Never fatal: no poster, no attachment."""
+        if not target.poster_url:
+            return []
+        try:
+            from google.cloud import storage
+
+            settings = get_settings()
+            client = storage.Client(project=settings.google_cloud_project)
+            blob = client.bucket(settings.poster_bucket).blob(f"posters/{target.target_id}.png")
+            return [("beatid-poster.png", blob.download_as_bytes(), "image/png")]
+        except Exception as exc:
+            log.warning("could not attach poster", extra={"error": str(exc)[:200]})
+            return []
 
     def _handle_send_reply(self, job: JobDoc) -> dict:
         self._assert_may_send()

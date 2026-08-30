@@ -695,3 +695,52 @@ need you" has to be true or the brief becomes something you stop reading.
 
 Also restored the send window to Mon-Fri 09:00-17:00. The test that had been deliberately
 red all afternoon is green again — which is exactly the job I gave it.
+
+---
+
+## Sun 30 Aug — Step 8: posters, and Imagen turns out to be gone
+
+223 tests. Posters generate, crop to 1080×1350, land in Cloud Storage and attach to the
+pitch.
+
+**The Saturday question got an unambiguous answer: Imagen is retired.** Every `imagen-*`
+endpoint returns 404 in every region I tried — global, us-central1, europe-west2. The
+deprecation notice I found during Stage One verification gave a migration date of
+2026-06-30 and said "recommended"; the endpoints are actually switched off. Flagging it
+on Saturday was worth it: discovering this at 2pm Monday, with the bonus depending on it,
+would have been a bad hour.
+
+The successor is the Gemini image family, which is exactly what Google's own migration
+table points at. Using `gemini-3-pro-image` — it renders text noticeably better than the
+flash variants, and a poster carrying a venue name and a date is mostly a typesetting
+problem.
+
+**Image models serve from `global` only.** europe-west2, where everything else runs, has
+none. `tools/images.py` builds its own client rather than sharing the regional one. Not
+something any doc told me — it came out of probing three models across three locations,
+which took two minutes and would have been an inscrutable 404 otherwise.
+
+**The poster shipped broken copy on its first real run, and it was my truncation.** The
+Researcher returns prose — "Welcome Week 2026 runs from September 18th through late
+September." — and I cut it to 32 characters to fit the poster. What got printed, in 40pt
+type, was:
+
+> **WELCOME WEEK STARTS ON SEPTEMBER**
+
+Grammatical wreckage, on an image that would have gone to a students' union. Truncation
+is fine for a log line and wrong for anything a human reads as finished work. It now uses
+the research line only if it already fits, tries one natural break, and otherwise falls
+back to "FRESHERS 2026". A generic line that reads correctly beats a specific one that
+reads as broken, and there is no third option that does not involve guessing at somebody's
+calendar.
+
+That is the same failure as the invented proof points and the 2009 hook: three times now,
+the bug has been *content* rather than *code*, and none of the three would have been
+caught by a test that only checked the pipeline ran. The tests I added for this one assert
+the copy is well-formed, not that the function returns a string.
+
+**Poster and pitch are deliberately independent jobs.** A failed poster must not block the
+pitch: an email with no poster is a slightly plainer email, and an email that never sends
+because an image model was busy is a lost target. The attachment is read back from Cloud
+Storage at send time rather than carried in the job payload, so a re-run picks up the
+current poster and job documents stay small.

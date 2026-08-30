@@ -82,7 +82,7 @@ the Gmail/Calendar refresh token is fetched from Secret Manager at call time.
 | Ticks | **Cloud Scheduler** | Hourly tick + an 08:00 Europe/London morning brief. |
 | Secrets | **Secret Manager** | OAuth refresh token lives here and nowhere else. |
 | Tracing | **Cloud Trace** via OpenTelemetry | One trace per inbound/tick, one span per agent and per tool call. |
-| Images | Imagen on Vertex AI | See `BUILDLOG.md` — the Imagen line is deprecation-flagged; model ID is a single config constant with a Gemini-image fallback. |
+| Images | `gemini-3-pro-image` on Vertex AI | **Imagen is retired** — see below. |
 | Language | **Python 3.12** | |
 
 ## OAuth scopes requested
@@ -207,6 +207,33 @@ Two independent detectors, combined with OR — either one firing quarantines:
 
 Measured on the 15-email fixture set in `tests/fixtures/inbound_emails.py`
 (5 attacks, 10 genuine): **regex 4/5, model 15/15, zero false positives on genuine mail.**
+
+## Posters — and a note on Imagen
+
+Greenroom generates a 1080×1350 poster per target and attaches it to the pitch. Prompt
+lives in `config/poster_prompt.py` and nowhere else, so it can be tuned without touching
+any other file.
+
+**The hackathon bonus names Imagen. Imagen no longer exists.** Verified against this
+project on 30 Aug 2026: every `imagen-*` endpoint returns `404 NOT_FOUND` in every region
+tested. Google's deprecation notice gave a migration date of 2026-06-30 and the endpoints
+are now actually switched off, not merely discouraged — the notice points at the Gemini
+image family as the successor, which is what we use.
+
+```
+global       gemini-3-pro-image       OK  1,986,090 bytes
+global       gemini-3.1-flash-image   OK  1,317,180 bytes
+global       gemini-2.5-flash-image   OK    819,090 bytes
+*            imagen-4.0-generate-001  404 NOT_FOUND   (all regions)
+```
+
+Two things worth recording for anyone reproducing this:
+
+* **Image models serve from the `global` endpoint only.** `europe-west2`, where the rest
+  of Greenroom runs, has none — so `tools/images.py` builds its own client rather than
+  sharing the regional one.
+* **No model offers 4:5.** The poster is generated at 3:4 and centre-cropped, which is
+  why the prompt insists on clear space below the last line of text.
 
 ## The tick
 
