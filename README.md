@@ -169,6 +169,45 @@ stateDiagram-v2
 
 <!-- STATE-DIAGRAM:END -->
 
+## Inbound: how a reply is handled
+
+```
+Gmail watch (label: greenroom, never INBOX)
+   → Pub/Sub topic → push subscription (OIDC-signed)
+   → POST /inbound  — verifies issuer, audience and service-account email
+   → dedupe on Gmail message id (Pub/Sub is at-least-once)
+   → ownership check: is this a thread Greenroom created?
+   → Gatekeeper  ── injection? ──→ quarantine, label, escalate, STOP
+   → Negotiator (structured verdict only, never the raw email)
+   → policy.evaluate  ── outside? ──→ escalation draft citing the rule
+   → draft: review | veto (30 min) | autopilot
+   → job → Scheduler → send (recipient re-checked against targets.csv)
+```
+
+The Gatekeeper runs before anything else sees a message, and if it quarantines, the
+pipeline stops — the Negotiator is never invoked, so attacker-controlled text never
+reaches an agent that drafts replies. What crosses that boundary is a typed verdict:
+an intent enum, a neutral third-person summary, at most three quotes capped at 200
+characters, and extracted terms as numbers and booleans.
+
+**A model never decides whether a deal is acceptable.** It extracts what was asked for;
+`greenroom/policy.py` decides, deterministically, against `config/policy.yaml`. So an
+email cannot talk the agent into a bad deal — the agent is not the thing doing the
+accepting. Every breach carries its rule id and configured value, which is why the
+dashboard cites `fee.floor = 850` rather than a paraphrase.
+
+### Injection screening
+
+Two independent detectors, combined with OR — either one firing quarantines:
+
+| Layer | Catches | Cannot |
+|---|---|---|
+| Deterministic regex | 4 of the 5 test attacks, instantly and for free | anticipate a novel phrasing |
+| Gemini 3.5 Flash | all 5, including the subtly embedded one | be relied on alone against text written to fool a model |
+
+Measured on the 15-email fixture set in `tests/fixtures/inbound_emails.py`
+(5 attacks, 10 genuine): **regex 4/5, model 15/15, zero false positives on genuine mail.**
+
 ## Durability
 
 Every side effect — an email, a calendar booking, a poster — is a job document with an

@@ -26,6 +26,7 @@ from greenroom.models import GEMINI_MODEL
 from greenroom.obs import configure_logging, get_logger
 from greenroom.settings import get_settings
 from greenroom.web.dashboard import router as dashboard_router
+from greenroom.web.inbound import router as inbound_router
 
 log = get_logger(__name__)
 
@@ -146,6 +147,28 @@ async def tick(request: Request) -> dict[str, Any]:
     return {"status": "ok", **tally}
 
 
+@app.post("/admin/watch")
+async def register_watch(request: Request) -> dict[str, Any]:
+    """Register (or renew) the Gmail push watch, scoped to the greenroom label.
+
+    Gmail expires a watch after 7 days, so the hourly tick renews it too. Exposed here
+    so it can be kicked manually during setup and on camera.
+    """
+    from greenroom.web.auth import is_unlocked
+    from greenroom.web.deps import get_scheduler
+
+    if not is_unlocked(request):
+        return JSONResponse({"status": "forbidden"}, status_code=403)
+
+    settings = get_settings()
+    topic = f"projects/{settings.google_cloud_project}/topics/{settings.pubsub_topic}"
+    gmail = get_scheduler().gmail
+    gmail.ensure_labels()
+    result = gmail.start_watch(topic)
+    return {"status": "ok", "topic": topic, **result}
+
+
+app.include_router(inbound_router)
 app.include_router(dashboard_router)
 
 

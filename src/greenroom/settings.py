@@ -84,7 +84,12 @@ class Settings(BaseSettings):
         import os
 
         if self.google_genai_use_vertexai:
+            # Vertex AI is being rebranded "Gemini Enterprise Agent Platform" and ADK
+            # 2.8 warns that GOOGLE_GENAI_USE_VERTEXAI is deprecated in favour of
+            # GOOGLE_GENAI_USE_ENTERPRISE. Both are set: the new name silences the
+            # warning, the old one keeps working if a library has not caught up yet.
             os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "true")
+            os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "true")
         if self.google_cloud_project:
             os.environ.setdefault("GOOGLE_CLOUD_PROJECT", self.google_cloud_project)
         if self.google_cloud_location:

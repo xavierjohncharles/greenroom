@@ -76,6 +76,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# The injection-detection regexes are far easier to read and audit on one line each
+# than wrapped across three. Every other file keeps the 100-column limit.
+"src/greenroom/agents/gatekeeper.py" = ["E501"]
+
 [dependency-groups]
 dev = [
     "httpx2>=2.12.0",
