@@ -515,3 +515,43 @@ The rejection itself worked exactly as designed: decision recorded, target held 
 `review`, promotion counter reset to zero, and **no send job created**. The human gate is
 the reason none of this reached a students' union, which is the entire argument for
 starting every target in review mode.
+
+---
+
+## Sun 30 Aug — first real email sent, and the trust dial was scoring the wrong thing
+
+**Cut line A cleared, outbound half.** A real pitch left Cloud Run:
+
+```
+to      : crazyxydj@gmail.com
+from    : Xavier John-Charles <beatid.greenroom@gmail.com>
+subject : interactive music night for RISE
+labels  : greenroom, SENT
+```
+
+Research → draft → human approval → job → send, all on the deployed service, with the
+follow-up ladder (day 3, day 7, close day 14) queued automatically at send time.
+
+**The allow-list proved itself by accident first.** A stale send job from earlier testing
+targeted `venue@another-su.ac.uk`, an address that had since been removed from
+targets.csv. With dry-run *off*, the Scheduler refused it:
+`refusing to send to 'venue@another-su.ac.uk': not in config/targets.csv (1 addresses
+allow-listed)`. That is the hard cap working against a real send attempt rather than a
+test fixture.
+
+**The trust dial was measuring the button, not the text.** Xavier pressed "Save edit &
+send" without changing anything, and it was recorded as an edit: the target lost its
+promotion credit, and an empty diff was stored in `decisions` as if it were a style
+signal. Two bugs in one. A genuine approval was penalised, and the style memo — which
+learns from diffs — would have been fed no-op examples that teach nothing while diluting
+the real ones.
+
+The mechanic is supposed to answer one question: *did the human change what the agent
+wrote?* It now compares the text and ignores which button was pressed. An unchanged draft
+is an approval however it was submitted.
+
+Worth noting how this surfaced: not from a test, but from reading a stored diff out of
+Firestore to show Xavier what the agent had learned from him — and finding it empty.
+Making the system's internal state legible is what caught it, which is an argument for
+the trace and the decisions collection being visible in the dashboard rather than merely
+recorded.

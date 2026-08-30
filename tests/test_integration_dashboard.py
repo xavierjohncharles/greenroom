@@ -263,3 +263,35 @@ def test_the_pause_control_reaches_the_send_gate(client, repo):
     paused, reason = repo.is_paused()
     assert paused is True and "demo" in reason
     assert "PAUSED" in client.get("/").text
+
+
+async def test_pressing_save_edit_without_changing_anything_counts_as_approval(
+    client, repo, target_with_draft
+):
+    """Regression: the trust dial scored the button pressed, not whether the text
+    changed. Clicking "Save edit & send" on an untouched draft was recorded as an edit,
+    which cost a genuine approval its promotion credit and stored an empty diff as if it
+    were a style signal."""
+    target, draft = target_with_draft
+
+    _post(
+        client, target.target_id, draft.draft_id,
+        action="edit", subject=draft.subject, body=draft.body,
+    )
+
+    assert repo.get_draft(draft.draft_id).status == DraftStatus.APPROVED
+    assert repo.get_target(target.target_id).clean_approvals == 1
+
+    latest = repo.recent_decisions(limit=1)[0]
+    assert latest.kind == DecisionKind.APPROVED
+    assert not latest.diff, "an unchanged draft has no diff to learn from"
+
+
+async def test_a_real_edit_still_registers_as_an_edit(client, repo, target_with_draft):
+    target, draft = target_with_draft
+    _post(
+        client, target.target_id, draft.draft_id,
+        action="approve", subject=draft.subject, body=draft.body + " One more line.",
+    )
+    assert repo.get_draft(draft.draft_id).status == DraftStatus.EDITED
+    assert repo.recent_decisions(limit=1)[0].diff

@@ -243,7 +243,13 @@ async def resolve_draft(
         or body.strip() != draft.original_body.strip()
     )
 
-    if action == "edit" or changed:
+    # The trust dial measures whether a human CHANGED the agent's output, not which
+    # button they happened to press. Pressing "Save edit & send" without touching the
+    # text is an approval: the draft went out exactly as written. Scoring the button
+    # instead cost a real approval its promotion credit and stored an empty diff as if
+    # it were a style signal, which would have quietly poisoned the style memo with
+    # no-op examples.
+    if changed:
         diff = "\n".join(
             difflib.unified_diff(
                 draft.original_body.splitlines(),
