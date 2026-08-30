@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from greenroom.settings import get_settings
 from greenroom.tools.calendar import CalendarTool
 from greenroom.tools.gmail import GmailTool, SendRefused, ThreadNotOwned, assert_allowed_recipient
 
@@ -142,4 +143,40 @@ def test_reply_sets_threading_headers():
     assert msg["In-Reply-To"] == "<orig@su.ac.uk>"
     assert msg["References"] == "<orig@su.ac.uk>"
     assert "Beat ID Ltd" not in msg["From"]  # sender_name, not company_name
-    assert "admin@beatidapp.com" in msg["From"]
+    assert get_settings().agent_mailbox in msg["From"]
+
+
+
+# ------------------------------------------------------------------ mailbox required
+
+
+def test_an_unset_mailbox_refuses_to_build_a_gmail_tool(monkeypatch):
+    """Regression: an empty GREENROOM_MAILBOX made the inbound self-send check
+    `"" in from_addr` — true for every message — which silently skipped the entire
+    inbound pipeline, quarantine included. A misconfiguration must fail loudly."""
+    from greenroom.settings import Settings
+
+    monkeypatch.setattr(
+        "greenroom.tools.gmail.get_settings", lambda: Settings(_env_file=None)
+    )
+    with pytest.raises(RuntimeError, match="GREENROOM_MAILBOX is not set"):
+        GmailTool(dry_run=True)
+
+
+@pytest.mark.parametrize(
+    "from_header,expected",
+    [
+        ("Greenroom <agent@example.com>", True),
+        ("agent@example.com", True),
+        ("  AGENT@EXAMPLE.COM ", True),
+        ("Someone <agent@example.com.evil.test>", False),
+        ("Someone <notagent@example.com>", False),
+        ("", False),
+    ],
+)
+def test_self_send_detection_compares_parsed_addresses(from_header, expected):
+    """A substring test would treat 'agent@example.com.evil.test' as our own send and
+    skip screening it entirely."""
+    from greenroom.jobs.inbound import _same_address
+
+    assert _same_address(from_header, "agent@example.com") is expected

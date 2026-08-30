@@ -388,3 +388,45 @@ The general lesson, which applies well beyond this script: a setup step that say
 check X" and then checks a proxy for X is worse than one that does not check at all,
 because it converts a visible failure into an invisible one. The Calendar problem would
 otherwise have shown up as a 403 halfway through booking a call, live, on Monday.
+
+---
+
+## Sun 30 Aug — the agent mailbox is not a Google account
+
+`admin@beatidapp.com` turned out to be Zoho Mail, not Google Workspace. Confirmed
+from DNS rather than argued about: `beatidapp.com` MX points at `mx.zoho.eu`. The
+Gmail API cannot read or send for a mailbox hosted elsewhere, and the hackathon
+mandates Gmail + Calendar API, so no amount of OAuth configuration was ever going to
+make that address work. Four failed consent runs were chasing a door that does not
+exist.
+
+Greenroom now runs from a **dedicated Google account**. That is better than the
+original plan on its own merits, not just as a workaround: the mailbox contains
+nothing except Greenroom's own threads, so the containment rules have almost nothing
+left to contain, and the demo shows a clean inbox rather than someone's personal mail.
+
+**Making the mailbox configurable surfaced a genuinely bad bug.** Clearing the
+hardcoded default to `""` turned seven tests red, and the reason was worth the
+detour. The inbound pipeline decided whether a message was one of our own sends with:
+
+```python
+if settings.agent_mailbox.lower() in inbound_msg.from_addr.lower():
+    return "skipped"
+```
+
+With an unset mailbox that is `"" in from_addr` — true for **every** message. A
+misconfigured mailbox would have silently skipped every inbound reply, including every
+injection attempt, while reporting success. The whole Gatekeeper would have been dead
+code and nothing would have said so.
+
+The substring test was wrong even with a mailbox set: `agent@example.com` is a
+substring of `agent@example.com.evil.test`, so a lookalike sender would have been
+treated as our own outbound mail and skipped screening entirely. It now parses the
+From header and compares the address exactly, refuses to run at all without a
+configured mailbox, and `GmailTool` refuses to construct without one. Both directions
+have tests.
+
+Two lessons, both about defaults. A default that is *convenient* hides the code path
+where it is absent — the bug existed the whole time and only appeared when the default
+went away. And an empty string is the worst possible default for anything used in a
+containment check, because `""` is a substring of everything.

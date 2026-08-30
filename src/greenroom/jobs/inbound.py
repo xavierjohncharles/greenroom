@@ -48,6 +48,14 @@ _STATUS_FOR_INTENT = {
 }
 
 
+def _same_address(candidate: str, mailbox: str) -> bool:
+    """True if a From header refers to `mailbox`. Compares the parsed address only."""
+    from email.utils import parseaddr
+
+    _name, addr = parseaddr(candidate or "")
+    return bool(addr) and addr.strip().lower() == mailbox.strip().lower()
+
+
 def _deps():
     from greenroom.web.deps import get_queue, get_repo, get_scheduler
 
@@ -157,8 +165,16 @@ async def process_message(*, message_id: str, thread_id: str, owned: frozenset[s
         return "skipped"
 
     # Our own sends land in our own threads and would otherwise be screened as if they
-    # were replies.
-    if settings.agent_mailbox.lower() in inbound_msg.from_addr.lower():
+    # were replies. Parsed rather than substring-matched, for two reasons: an unset
+    # mailbox made `"" in from_addr` true for EVERY message, silently disabling the whole
+    # inbound pipeline including quarantine; and a substring test would also match a
+    # lookalike sender like "admin@beatidapp.com.evil.example".
+    if not settings.agent_mailbox:
+        raise RuntimeError(
+            "GREENROOM_MAILBOX is not set; refusing to process inbound mail without "
+            "knowing which address is our own"
+        )
+    if _same_address(inbound_msg.from_addr, settings.agent_mailbox):
         return "skipped"
 
     verdict = await screen(

@@ -111,6 +111,15 @@ def main() -> int:
 
         args.expect_mailbox = get_settings().agent_mailbox
 
+    if not args.expect_mailbox:
+        print(
+            "No agent mailbox configured. Set GREENROOM_MAILBOX in .env (it must be a\n"
+            "Google account — the Gmail API cannot serve a mailbox hosted elsewhere),\n"
+            "or pass --expect-mailbox.",
+            file=sys.stderr,
+        )
+        return 1
+
     project = args.project
     if not project:
         import subprocess

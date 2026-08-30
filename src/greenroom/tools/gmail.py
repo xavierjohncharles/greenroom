@@ -106,6 +106,11 @@ class GmailTool:
         settings = get_settings()
         self.dry_run = settings.dry_run if dry_run is None else dry_run
         self.mailbox = settings.agent_mailbox
+        if not self.mailbox:
+            raise RuntimeError(
+                "GREENROOM_MAILBOX is not set. It must be a Google account — the Gmail "
+                "API cannot read or send for a mailbox hosted elsewhere."
+            )
         self.label_root = settings.label_root
         self.label_escalated = settings.label_escalated
         self.label_quarantine = settings.label_quarantine

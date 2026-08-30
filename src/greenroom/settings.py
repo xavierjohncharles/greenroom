@@ -32,7 +32,11 @@ class Settings(BaseSettings):
     dry_run: bool = Field(default=True, alias="GREENROOM_DRY_RUN")
 
     # --- Identity -----------------------------------------------------------
-    agent_mailbox: str = Field(default="admin@beatidapp.com", alias="GREENROOM_MAILBOX")
+    # The agent's mailbox. MUST be a Google account: the Gmail API cannot read or send
+    # for a mailbox hosted elsewhere. beatidapp.com turned out to be on Zoho, so
+    # Greenroom runs from a dedicated Google account instead — which also keeps its
+    # blast radius to an inbox that contains nothing but its own threads.
+    agent_mailbox: str = Field(default="", alias="GREENROOM_MAILBOX")
 
     # --- Firestore ----------------------------------------------------------
     firestore_database: str = Field(default="(default)", alias="GREENROOM_FIRESTORE_DB")
