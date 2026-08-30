@@ -26,9 +26,23 @@ class StrictModel(BaseModel):
 
 class BrandLinks(StrictModel):
     website: str = ""
+    instagram: str = ""
+    tiktok: str = ""
     past_events: str = ""
     mixes_or_video: str = ""
     press_or_reviews: str = ""
+
+    def as_lines(self) -> list[str]:
+        """Only the links that are actually set. The Writer can link to nothing else."""
+        labels = {
+            "website": "Website",
+            "instagram": "Instagram",
+            "tiktok": "TikTok",
+            "past_events": "Past events",
+            "mixes_or_video": "Video",
+            "press_or_reviews": "Press",
+        }
+        return [f"{labels[k]}: {v}" for k, v in self.model_dump().items() if v]
 
 
 class CopyRules(StrictModel):

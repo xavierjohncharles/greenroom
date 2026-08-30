@@ -3,12 +3,12 @@
 # EVERYTHING IN THIS FILE IS TREATED AS FACT BY THE WRITER. It will be asserted, in
 # writing, to real organisations, under Xavier's name.
 #
-# An earlier version of this file contained claims nobody had verified — "DJ nights",
-# "artist liaison and rider management" — which I invented because they sounded like
-# things an events company does. They went out in a draft and were caught only because
-# a human read it. Config is upstream of every anti-hallucination guard in the codebase:
-# a false claim here is laundered into a fact by the time the Writer sees it, and no
-# test can catch it. If you cannot personally stand behind a line here, delete it.
+# An earlier version contained claims nobody had verified — "DJ nights", "artist
+# liaison", "full production in-house" — which I invented because they sounded like
+# things an events company does. They reached a draft and were caught only because a
+# human read it. Config sits upstream of every anti-hallucination guard in this
+# codebase: a false line here is a fact by the time the Writer sees it. If you cannot
+# personally stand behind a line, delete it rather than soften it.
 
 company_name: "Beat ID Ltd"
 sender_name: "Xavier John-Charles"
@@ -16,24 +16,25 @@ sender_email: "beatid.greenroom@gmail.com"
 sender_role: "Founder"
 
 # One paragraph. The spine of every pitch.
-# XAVIER: this is deliberately thin — it contains only what I could source from you.
-# Replace it with what Beat ID actually does, in your words.
 pitch: >-
-  Beat ID puts on live music nights built for student audiences. We handle the
-  booking, the production and the promotion, so the union gets a full room without
-  adding work to an already stretched events team.
+  Beat ID is a live guess-the-song night — think Kahoot, but for music. Teams race each
+  other to name tracks, and the room votes on what gets played next, so the crowd picks
+  its own soundtrack as the night goes on. We host it and we promote it through our own
+  channels, so the union gets a full room and a night that runs itself.
 
-# Concrete, checkable claims. The Writer is instructed to use these and invent nothing,
-# so this list is the ceiling on what it can say about us.
-# XAVIER: only the first two came from you. Add real ones, delete anything that is not.
+# Concrete, checkable claims. The Writer may use these and nothing else, so this list
+# is the ceiling on what Greenroom can say about us.
 proof_points:
   - "Run three times in East London, 80+ attendees per night"
   - "Drives measurable bar spend across the night, not just door numbers"
+  - "We host the night ourselves — no work for the union's events team"
+  - "We run the promotion ourselves through our own social channels"
+  - "Interactive and competitive: teams play against each other, the room votes on what gets played"
 
-# XAVIER: fill these in if you have them — they materially improve reply rates, and the
-# Writer can only link to what is here.
 links:
   website: "https://beatidapp.com"
+  instagram: "https://www.instagram.com/beatidapp"
+  tiktok: "https://www.tiktok.com/@beatidapp"
   past_events: ""
   mixes_or_video: ""
   press_or_reviews: ""
@@ -43,7 +44,9 @@ tone_notes: >-
   not like a marketing department. Short paragraphs. No exclamation marks, no "I hope
   this email finds you well", no stacked adjectives. Lead with something true and
   specific about their venue or programme that proves the email was not a mail-merge.
-  British English. Sign off simply. Aim for 120-180 words.
+  Explain what the night actually is early — "guess the song" is unfamiliar enough
+  that a reader should not have to work it out. British English. Sign off simply.
+  Aim for 120-180 words.
 
 copy_rules:
   max_words: 200
@@ -54,4 +57,9 @@ copy_rules:
     - "reach out"
     - "game-changer"
     - "revolutionary"
+    # We do not book acts, supply DJs, or provide production. Claiming any of it once
+    # already cost a rejected draft.
+    - "artist liaison"
+    - "DJ set"
+    - "rider"
   require_specific_hook: true

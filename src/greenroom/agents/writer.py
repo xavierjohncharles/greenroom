@@ -161,7 +161,8 @@ HOW THIS PERSON WRITES (learned from their edits to your past drafts)
 HARD LIMITS
 - Maximum {rules.max_words} words in the body.
 - Never use these phrases: {", ".join(rules.banned_phrases)}
-- Links you may include: {brand.links.website}
+- The ONLY links you may include (use at most two, whichever fit best):
+{chr(10).join("    " + line for line in brand.links.as_lines())}
 
 Write the email.
 """
