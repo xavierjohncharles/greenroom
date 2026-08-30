@@ -32,6 +32,16 @@ from greenroom.settings import get_settings
 log = get_logger(__name__)
 
 
+class RateLimited(RuntimeError):
+    """The image model is out of quota right now.
+
+    Distinct from a failure on purpose. A 429 means "not now", and treating it as a
+    failure burns a retry attempt against a job that was never broken — five quota
+    blips and a perfectly good poster job is dead. Same reasoning as a send blocked by
+    the send window in the Scheduler.
+    """
+
+
 @dataclass(frozen=True)
 class Poster:
     png: bytes
@@ -72,6 +82,7 @@ def _generate(prompt: str) -> tuple[bytes, str]:
     )
 
     last_error: Exception | None = None
+    rate_limited = False
     for model in (IMAGE_MODEL, IMAGE_FALLBACK_MODEL):
         try:
             response = client.models.generate_content(
@@ -89,9 +100,18 @@ def _generate(prompt: str) -> tuple[bytes, str]:
                         return part.inline_data.data, model
             last_error = RuntimeError(f"{model} returned no image part")
         except Exception as exc:
-            log.warning("image model failed", extra={"model": model, "error": str(exc)[:200]})
+            text = str(exc)
+            if "429" in text or "RESOURCE_EXHAUSTED" in text or "quota" in text.lower():
+                # Try the next model — quotas are per-model, so the flagship being busy
+                # does not mean the fallback is.
+                rate_limited = True
+                log.info("image model out of quota", extra={"model": model})
+            else:
+                log.warning("image model failed", extra={"model": model, "error": text[:200]})
             last_error = exc
 
+    if rate_limited:
+        raise RateLimited(f"every image model is rate limited: {last_error}")
     raise RuntimeError(f"no image model produced a poster: {last_error}")
 
 

@@ -147,3 +147,40 @@ def test_poster_generation_is_not_gated_by_dry_run():
     source = inspect.getsource(Scheduler._handle_generate_poster)
     assert "dry_run=self.dry_run" not in source
     assert "generate_posters" in source
+
+
+def test_a_rate_limit_is_blocked_not_failed():
+    """A 429 means "not now", not "broken". Treating it as a failure burns a retry
+    attempt against a job that was never faulty — five quota blips and a perfectly good
+    poster job is dead. Same reasoning as a send blocked by the send window."""
+    from greenroom.agents.scheduler import BLOCKING_ERRORS, SendBlocked
+    from greenroom.tools.images import RateLimited
+
+    assert RateLimited in BLOCKING_ERRORS
+    assert SendBlocked in BLOCKING_ERRORS
+    assert not issubclass(RateLimited, SendBlocked)
+
+
+def test_quota_errors_are_recognised(monkeypatch):
+    """Google returns 429 / RESOURCE_EXHAUSTED; both must map to RateLimited rather
+    than a generic failure."""
+    from greenroom.tools import images
+
+    def raising(message):
+        def boom(*_a, **_k):
+            raise RuntimeError(message)
+
+        return boom
+
+    monkeypatch.setattr(images, "_load_prompt_builder", lambda: lambda **_k: "prompt")
+
+    for message in (
+        "429 RESOURCE_EXHAUSTED",
+        "Quota exceeded for model",
+        "429 Too Many Requests",
+    ):
+        models = type("M", (), {"generate_content": staticmethod(raising(message))})()
+        client = type("C", (), {"models": models})()
+        monkeypatch.setattr("google.genai.Client", lambda _client=client, **_k: _client)
+        with pytest.raises(images.RateLimited):
+            images.make_poster(target_id="t", organisation="Test SU")

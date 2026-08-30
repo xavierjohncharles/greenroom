@@ -901,3 +901,28 @@ is worse than a failure, because a failure is visible.
 
 There is now a test asserting the poster handler does not reference `self.dry_run`, which
 is the third variant of a test I keep having to write.
+
+**Then twelve of the twenty posters hit `429 RESOURCE_EXHAUSTED`.** Image quota on a new
+project is tight, and twenty flagship-model calls in a few minutes is more than it allows.
+
+The interesting part is what the system did with that. The jobs went to `failed`, backed
+off, and retried on later ticks — most succeeded second time. That is the durability
+machinery from step 3 working on a failure I had not anticipated, which is the only real
+test of it.
+
+But the *classification* was wrong, and would have bitten later. A 429 is "not now", not
+"broken". Treating it as a failure burns a retry attempt against a job that was never
+faulty, and five quota blips in a busy hour would leave a perfectly good poster job
+`dead`. Exactly the same error I had already fixed once for sends blocked by the send
+window — and, like the dry-run confusion, I did not recognise the shape until it recurred.
+
+`RateLimited` now sits alongside `SendBlocked` in `BLOCKING_ERRORS`: requeued, no attempt
+consumed. The two exceptions are deliberately not related by inheritance, because they
+are different conditions that happen to share a response, and collapsing them would make
+the next one harder to see.
+
+Also worth recording: the fallback model exists for exactly this and was not helping,
+because the original code treated the first model's 429 as fatal before trying the second.
+Quotas are per-model, so the flagship being busy says nothing about the fallback. It now
+tries both before giving up, and only raises `RateLimited` if both were rate limited
+specifically.

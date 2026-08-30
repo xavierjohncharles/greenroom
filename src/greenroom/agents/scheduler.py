@@ -35,12 +35,20 @@ from greenroom.state.models import (
     utcnow,
 )
 from greenroom.state.repo import Repo, evaluate_send_gate
+from greenroom.tools.images import RateLimited
 
 log = get_logger(__name__)
 
 
 class SendBlocked(RuntimeError):
     """A send job could not run right now. Not a failure — it stays queued."""
+
+
+# Conditions that mean "not now" rather than "broken". A job stopped by one of these is
+# requeued without burning a retry attempt. The distinction matters: five quota blips
+# would otherwise kill a poster job that was never faulty, exactly as a closed send
+# window would once have killed a pitch.
+BLOCKING_ERRORS: tuple[type[BaseException], ...] = (SendBlocked, RateLimited)
 
 
 class Scheduler:
@@ -96,7 +104,7 @@ class Scheduler:
                 # not. Awaiting conditionally keeps both kinds in one registry.
                 if inspect.isawaitable(result):
                     result = await result
-            except SendBlocked as exc:
+            except BLOCKING_ERRORS as exc:
                 # Not a failure: the world simply is not ready yet. Put it back
                 # without burning an attempt against max_attempts.
                 self._requeue(job, str(exc), now=now)
