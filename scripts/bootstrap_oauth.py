@@ -25,6 +25,7 @@ from pathlib import Path
 
 from google.cloud import secretmanager
 from google_auth_oauthlib.flow import InstalledAppFlow
+from oauthlib.oauth2.rfc6749.errors import MismatchingStateError, OAuth2Error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -51,6 +52,25 @@ def upsert_secret(
         request={"parent": secret_path, "payload": {"data": payload.encode("utf-8")}}
     )
     return version.name
+
+
+def _authorise(flow, args):
+    """Run the local-server OAuth dance. Split out so main() can handle its errors."""
+    return flow.run_local_server(
+        port=args.port,
+        open_browser=args.open_browser,
+        authorization_prompt_message=(
+            "\n" + "=" * 70 + "\n"
+            "  COPY THE URL BELOW into a PRIVATE / INCOGNITO window.\n"
+            f"  Sign in as: {args.expect_mailbox}\n"
+            "  Do not open it in your normal browser — it will reuse the account you\n"
+            "  are already signed into.\n" + "=" * 70 + "\n\n{url}\n\n"
+            "Waiting for you to finish in the browser...\n"
+        ),
+        access_type="offline",
+        prompt="select_account consent",
+        login_hint=args.expect_mailbox,
+    )
 
 
 def main() -> int:
@@ -120,21 +140,29 @@ def main() -> int:
     # authorised a personal inbox twice in a row. The browser is now NOT opened by
     # default — the URL is printed for pasting into a private window, which is the only
     # reliable way to control which account consents.
-    creds = flow.run_local_server(
-        port=args.port,
-        open_browser=args.open_browser,
-        authorization_prompt_message=(
-            "\n" + "=" * 70 + "\n"
-            "  COPY THE URL BELOW into a PRIVATE / INCOGNITO window.\n"
-            f"  Sign in as: {args.expect_mailbox}\n"
-            "  Do not open it in your normal browser — it will reuse the account you\n"
-            "  are already signed into.\n" + "=" * 70 + "\n\n{url}\n\n"
-            "Waiting for you to finish in the browser...\n"
-        ),
-        access_type="offline",
-        prompt="select_account consent",
-        login_hint=args.expect_mailbox,
-    )
+    try:
+        creds = _authorise(flow, args)
+    except MismatchingStateError:
+        print(
+            "\nFAILED: CSRF state mismatch.\n\n"
+            "This means the browser completed an authorisation from an EARLIER run of\n"
+            "this script. Each run generates a fresh state value, so an old tab landing\n"
+            "on http://localhost:%d is rejected.\n\n"
+            "To fix it:\n"
+            "  1. Quit the private/incognito window completely (Cmd-Shift-W), so no old\n"
+            "     tab can fire a callback.\n"
+            "  2. Re-run this script.\n"
+            "  3. Copy the NEW url it prints — not one from scrollback.\n\n"
+            "Nothing has been written." % args.port,
+            file=sys.stderr,
+        )
+        return 1
+    except OAuth2Error as exc:
+        print(
+            f"\nFAILED: authorisation was refused: {exc}\nNothing has been written.",
+            file=sys.stderr,
+        )
+        return 1
 
     if not creds.refresh_token:
         print(
