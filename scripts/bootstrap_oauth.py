@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from google.cloud import secretmanager
@@ -201,6 +202,19 @@ def main() -> int:
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
 
+    # Report what Google ACTUALLY granted, from the raw token response. `creds.scopes`
+    # reflects the request, not the grant, which is what made the first version of this
+    # script lie. This is the only authoritative answer to "why is Calendar 403ing".
+    raw_token = getattr(flow.oauth2session, "token", {}) or {}
+    granted_raw = raw_token.get("scope") or ""
+    granted = set(granted_raw.split()) if isinstance(granted_raw, str) else set(granted_raw)
+    if granted:
+        print("\nScopes Google actually granted:")
+        for scope in sorted(granted):
+            print(f"  + {scope}")
+        for scope in sorted(set(SCOPES) - granted):
+            print(f"  - {scope}   << REQUESTED BUT NOT GRANTED")
+
     print("\nVerifying the token actually works...")
 
     try:
@@ -224,9 +238,25 @@ def main() -> int:
         return 1
     print(f"  Gmail    OK — authorised as {authorised} ({profile.get('messagesTotal')} messages)")
 
+    # Probe the two things Greenroom actually does, and nothing else. An earlier version
+    # called calendars().get(), which reads calendar *metadata* and needs the full
+    # `calendar` or `calendar.readonly` scope — neither of which we request, and neither
+    # of which we need. It failed with 403 "insufficient scopes" against a token that was
+    # perfectly good, and sent us round the OAuth loop three times chasing a phantom.
+    # A verification probe must exercise the granted capability, not an adjacent one.
     try:
         calendar = build("calendar", "v3", credentials=creds, cache_discovery=False)
-        primary = calendar.calendars().get(calendarId="primary").execute()
+        # calendar.events: can we read and (therefore) create events?
+        calendar.events().list(calendarId="primary", maxResults=1).execute()
+        # calendar.freebusy: can we see when the owner is busy?
+        now = datetime.now(UTC)
+        calendar.freebusy().query(
+            body={
+                "timeMin": now.isoformat(),
+                "timeMax": (now + timedelta(hours=1)).isoformat(),
+                "items": [{"id": "primary"}],
+            }
+        ).execute()
     except HttpError as exc:
         print(f"\nFAILED: Calendar access does not work: {exc}\n", file=sys.stderr)
         print(
@@ -239,7 +269,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"  Calendar OK — primary is {primary.get('id')} ({primary.get('timeZone')})")
+    print("  Calendar OK — events.list and freebusy.query both succeeded")
 
     client = secretmanager.SecretManagerServiceClient()
     print("\nWriting secrets...")
