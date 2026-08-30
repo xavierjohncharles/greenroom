@@ -74,6 +74,17 @@ def _authorise(flow, args):
 
 
 def main() -> int:
+    # stdout is block-buffered whenever this is not attached to a terminal — under make,
+    # or when a caller backgrounds it because the local server blocks for as long as a
+    # human takes to consent. A buffered authorisation URL means the script sits waiting
+    # for a callback nobody was ever shown how to trigger, which looks exactly like a
+    # hang. Flush every line instead of trusting the caller's environment.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):  # not a real stream (captured, piped oddly)
+        pass
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client-json", required=True, help="OAuth client JSON from the console")
     parser.add_argument("--project", help="GCP project id (defaults to gcloud's current)")

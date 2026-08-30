@@ -62,4 +62,4 @@ diagram: ## Regenerate the README state diagram from state/machine.py
 .PHONY: oauth
 oauth: ## One-time: consent as the agent mailbox, store the refresh token in Secret Manager
 	@test -n "$(CLIENT_JSON)" || { echo "Usage: make oauth CLIENT_JSON=~/Downloads/client_secret_xxx.json"; exit 1; }
-	$(UV) run python scripts/bootstrap_oauth.py --client-json $(CLIENT_JSON) --project $(PROJECT_ID)
+	PYTHONUNBUFFERED=1 $(UV) run python scripts/bootstrap_oauth.py --client-json $(CLIENT_JSON) --project $(PROJECT_ID)
