@@ -1,32 +1,39 @@
 # Greenroom brand configuration for Beat ID Ltd.
-# The Writer and Negotiator read this. Nothing here is a secret.
-# Xavier: edit freely — every field below lands in the drafted email.
+#
+# EVERYTHING IN THIS FILE IS TREATED AS FACT BY THE WRITER. It will be asserted, in
+# writing, to real organisations, under Xavier's name.
+#
+# An earlier version of this file contained claims nobody had verified — "DJ nights",
+# "artist liaison and rider management" — which I invented because they sounded like
+# things an events company does. They went out in a draft and were caught only because
+# a human read it. Config is upstream of every anti-hallucination guard in the codebase:
+# a false claim here is laundered into a fact by the time the Writer sees it, and no
+# test can catch it. If you cannot personally stand behind a line here, delete it.
 
 company_name: "Beat ID Ltd"
 sender_name: "Xavier John-Charles"
-# The address Greenroom actually sends from. Must be a Google account: the Gmail API
-# cannot serve a mailbox hosted elsewhere (beatidapp.com is on Zoho).
 sender_email: "beatid.greenroom@gmail.com"
 sender_role: "Founder"
 
-# One paragraph. This is the spine of the pitch; the Writer personalises around it.
+# One paragraph. The spine of every pitch.
+# XAVIER: this is deliberately thin — it contains only what I could source from you.
+# Replace it with what Beat ID actually does, in your words.
 pitch: >-
-  Beat ID runs high-energy live music and DJ nights built for student audiences —
-  a curated line-up, a proper production setup, and a promo push that fills the room
-  rather than relying on the venue's own mailing list. We handle booking, artists,
-  sound and marketing end to end, so the union gets a sold-out night without adding
-  work to an already stretched events team.
+  Beat ID puts on live music nights built for student audiences. We handle the
+  booking, the production and the promotion, so the union gets a full room without
+  adding work to an already stretched events team.
 
-# Concrete, checkable claims. The Writer is instructed to use these and invent nothing.
+# Concrete, checkable claims. The Writer is instructed to use these and invent nothing,
+# so this list is the ceiling on what it can say about us.
+# XAVIER: only the first two came from you. Add real ones, delete anything that is not.
 proof_points:
   - "Run three times in East London, 80+ attendees per night"
   - "Drives measurable bar spend across the night, not just door numbers"
-  - "Full production handled in-house — sound, lighting, artist liaison"
-  - "Promo campaign run by us across social and student networks"
 
+# XAVIER: fill these in if you have them — they materially improve reply rates, and the
+# Writer can only link to what is here.
 links:
   website: "https://beatidapp.com"
-  # Xavier: add these if you have them — they materially improve reply rates.
   past_events: ""
   mixes_or_video: ""
   press_or_reviews: ""
@@ -38,7 +45,6 @@ tone_notes: >-
   specific about their venue or programme that proves the email was not a mail-merge.
   British English. Sign off simply. Aim for 120-180 words.
 
-# Hard constraints on generated copy. The Writer is checked against these.
 copy_rules:
   max_words: 200
   banned_phrases:
@@ -48,4 +54,4 @@ copy_rules:
     - "reach out"
     - "game-changer"
     - "revolutionary"
-  require_specific_hook: true   # must reference something real about the target
+  require_specific_hook: true

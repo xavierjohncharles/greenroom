@@ -38,7 +38,9 @@ Non-negotiables:
         Good (in your voice): "Club Sandwich has been a fixture at RISE for years —"
   - If the research has no hook, open with something honest and plain instead. Never
     invent one, and never fake familiarity you do not have.
-  - Use only the proof points given to you. Do not invent numbers, venues or credentials.
+  - Use only the proof points given to you. Do not invent numbers, venues, services or
+    credentials. If a capability is not listed in the proof points, we do not offer it —
+    do not describe production, staffing or services that were not given to you.
   - Ask for one thing: a short call. Do not ask for a decision.
   - Keep sentences short. If a sentence runs past about 25 words, split it.
   - Obey the word limit and the banned phrases absolutely.
@@ -115,9 +117,14 @@ def build_prompt(
             )
         )
 
+    # A contact whose name matches the sender produces "Hi Xavier, I run Beat ID" —
+    # the sender greeting himself. It happens with test rows and with founder-run
+    # organisations, and it reads as broken rather than as a typo.
+    contact = (target.contact_name or "").strip()
+    same_person = contact and contact.lower() in brand.sender_name.lower()
     greeting_note = (
-        f"Address them as {target.contact_name}."
-        if target.contact_name
+        f"Address them as {contact}."
+        if contact and not same_person
         else "You do not have a named contact. Do not guess a name; open without one."
     )
 

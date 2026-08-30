@@ -468,3 +468,50 @@ with a test that fails if anyone re-gates setup.
 The mailbox change turned out well beyond fixing the Zoho problem: `beatid.greenroom@gmail.com`
 contains nothing but Greenroom's own threads, so the demo shows a clean inbox and the
 containment rules have almost nothing left to contain.
+
+---
+
+## Sun 30 Aug — first real draft rejected, and the fabrication was mine
+
+Xavier rejected the first live draft. Four problems, and the two that matter were not
+the Writer's fault at all:
+
+> *"it referenced an event from 2009 which is way too long ago, there is no artist
+> liaison, we currently don't have DJs. and it starts with hi xavier i am xavier"*
+
+**The invented capabilities came from `config/brand.yaml`, which I wrote.** I seeded it
+with "DJ nights", "artist liaison and rider management" and "full production handled
+in-house" because those sounded like things an events company does. Nobody had verified
+any of them. The Writer then used them exactly as instructed — it was told to use only
+the given proof points and invent nothing, and it obeyed perfectly.
+
+That is worth sitting with, because the whole system is built against hallucination and
+it still shipped false claims about a real company to a real inbox. **Config is upstream
+of every guard.** The Gatekeeper screens inbound. `validate_draft` checks banned phrases
+and word counts. The Researcher is told to source everything. None of them can catch a
+false premise that was already sitting in the config file — by the time the Writer reads
+it, a fabrication has been laundered into a fact. I moved the hallucination one layer up
+where no test could see it, and then congratulated myself in this log that the
+anti-hallucination rule was holding.
+
+`brand.yaml` now contains only the two proof points that came from Xavier directly, with
+a header saying plainly that everything in it will be asserted in writing under his name
+and that unverifiable lines should be deleted rather than softened.
+
+**The 2009 hook is a genuine spec bug of mine.** The Researcher was told to find
+something "specific, checkable, and not true of every students' union". A Blur gig from
+2009 satisfies all three and is still a bad hook, because it is not a reason to book a
+night in 2026 — it signals that you read their Wikipedia page. Recency was a requirement
+I had in my head and never wrote down. It is now a hard rule: prefer the last 12 months,
+treat anything older than about three years as no hook at all, and rank current
+programme and Freshers dates above history.
+
+**"Hi Xavier, I run Beat ID"** was an artefact of a test row where the contact name
+matched the sender, but it would recur for any founder-run organisation, so the Writer
+now drops the greeting when the contact name matches the sender rather than producing
+something that reads as broken.
+
+The rejection itself worked exactly as designed: decision recorded, target held at
+`review`, promotion counter reset to zero, and **no send job created**. The human gate is
+the reason none of this reached a students' union, which is the entire argument for
+starting every target in review mode.
