@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from greenroom.config import ConfigError, load_brand, load_policy, load_targets
+from greenroom.settings import get_settings
 
 # ------------------------------------------------------------------ shipped config
 
@@ -18,7 +19,10 @@ from greenroom.config import ConfigError, load_brand, load_policy, load_targets
 def test_shipped_brand_is_valid(real_config_dir: Path):
     brand = load_brand(real_config_dir / "brand.yaml")
     assert brand.company_name
-    assert brand.sender_email == "admin@beatidapp.com"
+    # Not pinned to a literal address: the agent mailbox must be a Google account and
+    # moved once beatidapp.com turned out to be on Zoho. What matters is that the
+    # configured sender is the mailbox Greenroom actually sends from.
+    assert brand.sender_email == get_settings().agent_mailbox
     assert brand.proof_points, "the Writer needs at least one checkable claim"
 
 

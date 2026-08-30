@@ -4,7 +4,9 @@
 
 company_name: "Beat ID Ltd"
 sender_name: "Xavier John-Charles"
-sender_email: "admin@beatidapp.com"
+# The address Greenroom actually sends from. Must be a Google account: the Gmail API
+# cannot serve a mailbox hosted elsewhere (beatidapp.com is on Zoho).
+sender_email: "beatid.greenroom@gmail.com"
 sender_role: "Founder"
 
 # One paragraph. This is the spine of the pitch; the Writer personalises around it.
