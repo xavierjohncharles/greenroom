@@ -132,8 +132,21 @@ async def test_sending_a_pitch_queues_the_whole_follow_up_ladder(
 # ------------------------------------------------------------------ gates
 
 
-async def test_nothing_sends_outside_the_send_window(scheduler, queue, repo, seeded_target):
-    """A job blocked by the clock is requeued, not failed."""
+async def test_nothing_sends_outside_the_send_window(
+    scheduler, queue, repo, seeded_target, monkeypatch
+):
+    """A job blocked by the clock is requeued, not failed.
+
+    Uses an explicitly closed window rather than the shipped policy, which is widened by
+    hand from time to time to run live tests outside office hours."""
+    from greenroom.state.repo import SendGate
+
+    monkeypatch.setattr(
+        "greenroom.agents.scheduler.evaluate_send_gate",
+        lambda repo, *, policy, now=None, dry_run=False: SendGate(
+            False, "Saturday is outside the send window (weekdays only)"
+        ),
+    )
     job = _queue_pitch(queue, seeded_target.target_id)
 
     tally = await scheduler.run_due_jobs(limit=5, now=SATURDAY)

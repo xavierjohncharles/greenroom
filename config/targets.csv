@@ -1,3 +1,2 @@
 organisation,contact_name,email,venue_notes,tier,context
-Example Students' Union,Sam Taylor,events@example-su.ac.uk,"Main hall 450 cap, club night Thursdays",1,"Placeholder row — replace with the real list"
-Another Students' Union,,venue@another-su.ac.uk,"Two rooms, 200 + 600 cap",2,"Placeholder row — replace with the real list"
+Goldsmiths Students' Union,Xavier,crazyxydj@gmail.com,"RISE (formerly The Stretch), New Cross — 300 standing, 550 with the bar",1,"Live end-to-end test target: real organisation for research, deliverable address for the loop"

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from greenroom.config import get_config
 from greenroom.settings import get_settings
 from greenroom.tools.calendar import CalendarTool
 from greenroom.tools.gmail import GmailTool, SendRefused, ThreadNotOwned, assert_allowed_recipient
@@ -16,7 +17,10 @@ from greenroom.tools.gmail import GmailTool, SendRefused, ThreadNotOwned, assert
 
 
 def test_allow_listed_address_is_accepted():
-    assert assert_allowed_recipient("events@example-su.ac.uk") == "events@example-su.ac.uk"
+    """Reads the address from config rather than hardcoding one: targets.csv is edited
+    constantly and a pinned literal makes these fail for the wrong reason."""
+    addr = next(iter(get_config().allowed_addresses))
+    assert assert_allowed_recipient(addr) == addr
 
 
 def test_unlisted_address_is_refused():
@@ -25,7 +29,8 @@ def test_unlisted_address_is_refused():
 
 
 def test_allow_list_is_case_and_whitespace_insensitive():
-    assert assert_allowed_recipient("  EVENTS@Example-SU.ac.uk ") == "events@example-su.ac.uk"
+    addr = next(iter(get_config().allowed_addresses))
+    assert assert_allowed_recipient(f"  {addr.upper()} ") == addr
 
 
 def test_empty_address_is_refused():
@@ -91,7 +96,7 @@ def test_dry_run_send_returns_without_credentials():
     safe on a laptop with no credentials at all."""
     tool = GmailTool(dry_run=True)
     sent = tool.send_new(
-        to="events@example-su.ac.uk", subject="Beat ID x Example SU", body_text="Hello."
+        to=next(iter(get_config().allowed_addresses)), subject="Beat ID x SU", body_text="Hello."
     )
     assert sent.dry_run is True
     assert sent.message_id == "DRYRUN"
@@ -134,7 +139,7 @@ def test_reply_sets_threading_headers():
 
     tool = GmailTool(dry_run=True)
     raw = tool._build_mime(
-        to="events@example-su.ac.uk",
+        to=next(iter(get_config().allowed_addresses)),
         subject="Re: Beat ID",
         body_text="Thanks.",
         in_reply_to="<orig@su.ac.uk>",
