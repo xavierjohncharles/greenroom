@@ -10,6 +10,18 @@
   {% if target.clean_approvals %}· {{ target.clean_approvals }} clean approval(s) toward promotion{% endif %}
 </p>
 
+{% if target.poster_url %}
+<div class="card">
+  <h2 style="margin-top:0">Poster</h2>
+  <img src="/media/posters/{{ target.target_id }}.png" alt="Generated poster"
+       style="max-width:320px; border-radius:8px; border:1px solid var(--line)">
+  <div class="muted" style="margin-top:8px">
+    Generated per target and attached to the pitch. Prompt lives in
+    <span class="mono">config/poster_prompt.py</span>.
+  </div>
+</div>
+{% endif %}
+
 {% if research %}
 <div class="card">
   <h2 style="margin-top:0">What the Researcher found</h2>

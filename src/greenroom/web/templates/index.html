@@ -12,6 +12,12 @@
     <span class="muted" style="margin-left:auto">{{ brief.for_date }}</span>
   </div>
   <p style="margin:10px 0 0">{{ brief.summary }}</p>
+  {% if brief.audio_url and brief.audio_src %}
+    <audio controls preload="none" style="width:100%; margin-top:12px; height:36px">
+      <source src="{{ brief.audio_src }}" type="audio/wav">
+    </audio>
+    <div class="muted" style="margin-top:4px">Read aloud by Gemini TTS</div>
+  {% endif %}
 </div>
 {% endif %}
 

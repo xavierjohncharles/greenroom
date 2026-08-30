@@ -287,6 +287,7 @@ prove the fake works.
 | Secrets | **Secret Manager** | Refresh token fetched at call time, never on disk. |
 | Tracing | **Cloud Trace** / OpenTelemetry | Span per agent and per tool call. |
 | Images | `gemini-3-pro-image` | Imagen is retired — see below. |
+| Speech | `gemini-2.5-flash-tts` | The morning brief is read aloud on the dashboard. |
 | Language | **Python 3.12** | |
 
 ---
@@ -452,6 +453,15 @@ to be sent, so it is not open to anyone holding the URL.
 | `greenroom-morning-brief` | 08:00 Europe/London | the same tick, which also writes the brief and regenerates the style memo |
 
 Each step is isolated: if the brief fails, the follow-ups still go out.
+
+The brief is **read aloud** — `gemini-2.5-flash-tts`, played from the dashboard. The API
+returns raw PCM (`audio/L16`, 24 kHz, mono) with no container, which a browser will not
+play; it is wrapped in a WAV header before storage. Audio generation is non-fatal: a
+brief you can read is the product, audio you can also listen to is a nicety, and a speech
+outage must not cost you the brief.
+
+Posters and recordings are served through `/media/...` behind the dashboard gate rather
+than from a public bucket — they name real organisations and describe a real pipeline.
 
 Inbound has **two paths**. The Gmail watch is the fast one; the tick's thread
 reconciliation is the guarantee. It covers a missed push, an expired history window, and

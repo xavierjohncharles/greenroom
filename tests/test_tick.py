@@ -147,10 +147,22 @@ def test_brief_facts_are_counted_not_narrated(repo, real_config_dir):
     repo.create_draft(_draft(doc.target_id))
 
     facts = gather_brief_facts(repo)
-    assert facts["total_targets"] == 1
-    assert len(facts["escalations"]) == 1
-    assert len(facts["awaiting_approval"]) == 1
-    assert facts["escalations"][0]["organisation"] == target.organisation
+    assert facts["targets_in_pipeline"] == 1
+    assert len(facts["escalations_needing_your_decision"]) == 1
+    assert len(facts["drafts_awaiting_your_approval"]) == 1
+    assert facts["escalations_needing_your_decision"][0]["organisation"] == target.organisation
+
+
+def test_every_brief_fact_key_says_what_it_means(repo):
+    """Regression: `sends_today` and `events_today` were narrated as "2 sends scheduled"
+    and "1 event on the calendar". The first was sends already used, the second was audit
+    log lines. Counted right, described wrong — which is worse than not counting at all,
+    because a brief nobody can trust is worse than no brief."""
+    from greenroom.jobs.tick import gather_brief_facts
+
+    ambiguous = {"counts", "total_targets", "escalations", "awaiting_approval",
+                 "sends_today", "events_today", "quarantined_today"}
+    assert not (set(gather_brief_facts(repo)) & ambiguous)
 
 
 # ------------------------------------------------------------------ style memo

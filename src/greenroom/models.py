@@ -36,6 +36,15 @@ IMAGE_LOCATION: Final[str] = "global"
 POSTER_ASPECT_RATIO: Final[str] = "3:4"
 POSTER_SIZE_PX: Final[tuple[int, int]] = (1080, 1350)
 
-# --- Monday stretch goals ---------------------------------------------------
-VEO_MODEL: Final[str] = "veo-3.1"
-TTS_MODEL: Final[str] = "gemini-2.5-flash-tts"  # stable; 3.1-flash-tts is preview only
+# --- Speech -----------------------------------------------------------------
+# Verified against this project on 2026-08-30: serves from both `global` and
+# us-central1. Chose the stable model over gemini-3.1-flash-tts-preview because a
+# preview model is not something to discover has changed on the morning of a demo.
+# Returns raw PCM (audio/L16, 24kHz, mono), which needs a WAV header before a browser
+# will play it — the API does not wrap it.
+TTS_MODEL: Final[str] = "gemini-2.5-flash-tts"
+TTS_LOCATION: Final[str] = "global"
+TTS_VOICE: Final[str] = "Kore"  # calm and even; a brief is read, not performed
+TTS_SAMPLE_RATE: Final[int] = 24_000
+
+VEO_MODEL: Final[str] = "veo-3.1"  # not integrated — see BUILDLOG

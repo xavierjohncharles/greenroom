@@ -136,10 +136,16 @@ def gather_brief_facts(repo) -> dict[str, Any]:
     ]
     quarantined = [e for e in recent if e.get("kind") == "quarantined"]
 
+    # Keys are deliberately verbose. An earlier version used `sends_today` and
+    # `events_today`, and the model narrated them as "2 sends scheduled" and "1 event on
+    # the calendar" — the first was sends already used, the second was audit log lines.
+    # The numbers were counted correctly and described wrongly, which is the worse
+    # failure: a brief nobody can trust is worse than no brief. If a key can be misread,
+    # it will be.
     return {
-        "counts": counts,
-        "total_targets": len(targets),
-        "escalations": [
+        "targets_in_pipeline": len(targets),
+        "targets_by_status": counts,
+        "escalations_needing_your_decision": [
             {
                 "organisation": (
                     by_id[d.target_id].organisation if d.target_id in by_id else d.target_id
@@ -149,7 +155,7 @@ def gather_brief_facts(repo) -> dict[str, Any]:
             }
             for d in escalations
         ],
-        "awaiting_approval": [
+        "drafts_awaiting_your_approval": [
             {
                 "organisation": (
                     by_id[d.target_id].organisation if d.target_id in by_id else d.target_id
@@ -158,9 +164,9 @@ def gather_brief_facts(repo) -> dict[str, Any]:
             }
             for d in awaiting
         ],
-        "quarantined_today": len(quarantined),
-        "sends_today": repo.sends_today(),
-        "events_today": len(recent),
+        "inbound_messages_quarantined_today": len(quarantined),
+        "emails_already_sent_today": repo.sends_today(),
+        "agent_actions_logged_today": len(recent),
     }
 
 
@@ -181,9 +187,23 @@ async def write_morning_brief(repo) -> dict[str, Any]:
             "You write a short morning brief for a founder whose outreach agent ran "
             "overnight. Three or four sentences, no headings, no bullet points, no "
             "greeting. Lead with anything that needs a decision from him, then what "
-            "happened, then what is coming. Use only the numbers given to you and do "
-            "not invent any. If nothing needs him, say so plainly and briefly — a brief "
-            "that manufactures urgency to seem useful will be ignored by the second week."
+            "happened.\n\n"
+            "You are given a dictionary of facts. Every key says exactly what its value "
+            "means. Use only those numbers, describe each one as its key describes it, "
+            "and do not restate a number as something it is not — "
+            "`emails_already_sent_today` is mail that has gone, not mail that is "
+            "scheduled, and `agent_actions_logged_today` counts internal log entries, "
+            "not calendar events. If a fact is not in the dictionary, it does not go in "
+            "the brief.\n\n"
+            "It is read aloud as well as shown on screen, so write for the ear. Never "
+            "enumerate a list of counts — 'two researched, one escalated, one booked, "
+            "one negotiating' is unbearable spoken. Give the shape in a phrase instead: "
+            "'eleven in the pipeline, most still waiting on a first reply'. Round and "
+            "summarise rather than reciting, but never state a number that contradicts "
+            "the facts.\n\n"
+            "Three sentences is the target and four is the maximum. If nothing needs "
+            "him, say so plainly and stop — a brief that manufactures urgency to seem "
+            "useful gets ignored by the second week."
         ),
     )
 
@@ -191,11 +211,29 @@ async def write_morning_brief(repo) -> dict[str, Any]:
     tz = ZoneInfo(get_config().policy.operations.send_window.timezone)
     today = utcnow().astimezone(tz).date().isoformat()
 
+    # Read it aloud. Deliberately non-fatal: a brief you can read is the product, and
+    # audio you can also listen to is a nicety. An outage in the speech model must not
+    # cost you the brief itself.
+    audio_url = ""
+    try:
+        from greenroom.tools.speech import store, synthesise
+
+        speech = synthesise(summary, dry_run=False)
+        _gcs, audio_url = store(speech, name=today)
+    except Exception as exc:
+        log.warning("brief audio failed", extra={"error": str(exc)[:200]})
+
     repo._col("control").document(BRIEF_DOC).set(
-        {"for_date": today, "summary": summary.strip(), "facts": facts, "written_at": utcnow()}
+        {
+            "for_date": today,
+            "summary": summary.strip(),
+            "facts": facts,
+            "audio_url": audio_url,
+            "written_at": utcnow(),
+        }
     )
-    log.info("morning brief written", extra={"for_date": today})
-    return {"written": True, "for_date": today}
+    log.info("morning brief written", extra={"for_date": today, "has_audio": bool(audio_url)})
+    return {"written": True, "for_date": today, "audio": bool(audio_url)}
 
 
 def load_brief(repo) -> dict[str, Any]:

@@ -10,6 +10,7 @@ approval with no changes counts toward promotion, and any edit demotes immediate
 from __future__ import annotations
 
 import difflib
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -127,6 +128,8 @@ async def board(request: Request):
     from greenroom.jobs.tick import load_brief
 
     brief = load_brief(repo)
+    if brief.get("for_date"):
+        brief = dict(brief, audio_src=f"/media/briefs/{brief['for_date']}.wav")
 
     return templates.TemplateResponse(
         request,
@@ -326,6 +329,46 @@ async def quarantine(request: Request):
     return templates.TemplateResponse(
         request, "quarantine.html", {**_chrome(request, "quarantine"), "messages": messages}
     )
+
+
+@router.get("/media/{kind}/{name}")
+async def media(request: Request, kind: str, name: str):
+    """Stream a poster or a brief recording from Cloud Storage, behind the gate.
+
+    The alternative was making the bucket publicly readable so the browser could fetch
+    the URL directly. Proxying costs one route and keeps generated assets — which name
+    real organisations and describe a real pipeline — from being served to anyone who
+    guesses a filename.
+    """
+    from fastapi.responses import Response
+
+    if (redirect := _locked(request)) is not None:
+        return redirect
+
+    # Whitelist, not sanitisation: `name` is user-supplied and goes into an object path.
+    if kind not in {"posters", "briefs"} or not re.fullmatch(r"[A-Za-z0-9_.\-]{1,80}", name):
+        return Response(status_code=404)
+
+    settings = get_settings()
+    if not settings.poster_bucket:
+        return Response(status_code=404)
+
+    try:
+        from google.cloud import storage
+
+        client = storage.Client(project=settings.google_cloud_project)
+        blob = client.bucket(settings.poster_bucket).blob(f"{kind}/{name}")
+        if not blob.exists():
+            return Response(status_code=404)
+        content_type = "audio/wav" if kind == "briefs" else "image/png"
+        return Response(
+            blob.download_as_bytes(),
+            media_type=content_type,
+            headers={"Cache-Control": "private, max-age=300"},
+        )
+    except Exception as exc:
+        log.warning("media fetch failed", extra={"kind": kind, "name": name, "error": str(exc)})
+        return Response(status_code=404)
 
 
 @router.get("/settings", response_class=HTMLResponse)

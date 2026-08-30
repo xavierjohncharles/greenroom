@@ -788,3 +788,44 @@ same time.
 explicitly, because each one fails *silently* when missing and between them they cost
 about an hour today. That is the kind of thing a README exists for and a doc page will
 not tell you.
+
+---
+
+## Sun 30 Aug — Gemini TTS on the morning brief
+
+237 tests. The brief is now read aloud on the dashboard.
+
+**The undocumented bit is the container.** Gemini TTS returns raw PCM — `audio/L16`,
+24 kHz, mono — with no WAV header. Nothing in the docs is wrong about this; it simply is
+not mentioned, and the failure mode is a silent `<audio>` element rather than an error.
+Twelve lines of `wave` fixes it, but only if you think to look.
+
+**The first brief with audio said something false, and it was my key names.** It read:
+
+> "Today, there are 2 sends scheduled and 1 event on the calendar."
+
+Neither was true. `sends_today` was emails *already sent*, and `events_today` counted
+audit log entries. The model read both reasonably and described them wrongly. Every number
+was counted correctly in code — `gather_brief_facts` does pure Firestore reads precisely
+so the tallies cannot be hallucinated — and the narration was still wrong, because I had
+handed the model a dict whose keys were ambiguous.
+
+That is a sharper version of a lesson this build keeps teaching. Separating "count in
+code, narrate with a model" was the right architecture and it was not sufficient: the
+*interface* between the two has to be unambiguous as well. Keys are now
+`emails_already_sent_today` and `agent_actions_logged_today`, the instruction says
+explicitly what each is not, and a test fails if any of the old ambiguous names comes
+back. If a key can be misread, it will be.
+
+**Writing for the ear is a different instruction from writing for the page.** The first
+accurate brief ended: *"two researched, one escalated, one booked, one negotiating, three
+pitched, one closed no reply, one queued, and one replied"* — fine to skim, unbearable to
+listen to. Told to give the shape in a phrase instead, it now says *"eleven targets in
+your pipeline, with the majority currently pitched or under research"*, and writes "five
+hundred pounds" rather than "GBP 500" without being asked. 57 words, 23 seconds.
+
+**Assets are proxied, not made public.** The obvious way to get audio into an `<audio>`
+tag is to make the bucket publicly readable. But posters name real students' unions and
+briefs describe a real pipeline, so `/media/{posters,briefs}/{name}` streams them behind
+the same gate as the rest of the dashboard, with a whitelist on the path rather than
+sanitisation of it. Verified: no cookie redirects to login, traversal attempts 404.
