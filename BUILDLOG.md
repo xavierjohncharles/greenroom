@@ -357,3 +357,34 @@ Also switched the genai backend flag: ADK 2.8 warns that `GOOGLE_GENAI_USE_VERTE
 deprecated in favour of `GOOGLE_GENAI_USE_ENTERPRISE` (Vertex AI is being rebranded to
 Gemini Enterprise Agent Platform). Both are now set — the new name silences the warning,
 the old one keeps working for anything that has not caught up.
+
+---
+
+## Sun 30 Aug — OAuth bootstrap: two silent failures, both mine
+
+The first consent run produced a refresh token for **the wrong mailbox** —
+`crazyxydj@gmail.com`, a personal inbox with 51,814 messages — and **without the Calendar
+scopes**. The script reported success for both. Two separate false assurances:
+
+1. **The scope check was decorative.** It compared `creds.scopes` against the requested
+   set, but `google-auth-oauthlib` populates that field from what was *asked for*, not
+   what was *granted*. It could never have failed. The Calendar 403 only surfaced when
+   something actually called the Calendar API afterwards.
+2. **There was no identity check at all.** The script told the operator to sign in as the
+   agent mailbox and then simply trusted that they had. Chrome reused the account already
+   signed in, which is what Chrome does.
+
+A refresh token for the wrong mailbox is the worst artefact this script can produce, and
+it is worse here than usual: Greenroom's containment rules assume the mailbox is a
+low-traffic outreach inbox, and this one was a personal account with fifty thousand
+messages in it. The token version was destroyed in Secret Manager immediately.
+
+Both checks are now **functional and run before anything is written**: call
+`users.getProfile` and refuse unless the address matches the configured agent mailbox;
+call `calendars().get('primary')` and refuse if it 403s. Claimed capability is not
+capability. If the verification fails, nothing reaches Secret Manager at all.
+
+The general lesson, which applies well beyond this script: a setup step that says "I will
+check X" and then checks a proxy for X is worse than one that does not check at all,
+because it converts a visible failure into an invisible one. The Calendar problem would
+otherwise have shown up as a 403 halfway through booking a call, live, on Monday.

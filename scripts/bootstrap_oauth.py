@@ -60,7 +60,17 @@ def main() -> int:
     parser.add_argument("--client-secret-name", default="greenroom-oauth-client")
     parser.add_argument("--token-secret-name", default="greenroom-oauth-refresh-token")
     parser.add_argument("--port", type=int, default=8765, help="local redirect port")
+    parser.add_argument(
+        "--expect-mailbox",
+        default=None,
+        help="the mailbox that must be authorised (defaults to the configured agent mailbox)",
+    )
     args = parser.parse_args()
+
+    if not args.expect_mailbox:
+        from greenroom.settings import get_settings
+
+        args.expect_mailbox = get_settings().agent_mailbox
 
     project = args.project
     if not project:
@@ -83,8 +93,12 @@ def main() -> int:
     for s in SCOPES:
         print(f"  {s}")
     print()
-    print("A browser will open. Sign in as the AGENT MAILBOX (admin@beatidapp.com),")
-    print("not as your personal account.")
+    print("=" * 70)
+    print(f"  SIGN IN AS: {args.expect_mailbox}")
+    print("  NOT your personal account. Chrome will reuse whichever account you are")
+    print("  already signed into, so use a private/incognito window if unsure.")
+    print("  This script refuses to store a token for any other mailbox.")
+    print("=" * 70)
     print()
 
     flow = InstalledAppFlow.from_client_secrets_file(str(client_path), scopes=list(SCOPES))
@@ -99,14 +113,56 @@ def main() -> int:
         )
         return 1
 
-    granted = set(creds.scopes or [])
-    missing = set(SCOPES) - granted
-    if missing:
-        print("WARNING: these scopes were not granted:", file=sys.stderr)
-        for s in sorted(missing):
-            print(f"  {s}", file=sys.stderr)
-        print("The agent will fail at runtime. Re-run and tick every box.", file=sys.stderr)
+    # --- verify BEFORE writing anything ---------------------------------
+    #
+    # An earlier version of this script trusted `creds.scopes` and skipped the mailbox
+    # check entirely. Both failed silently in practice: the OAuth library reports the
+    # scopes it *requested*, not the ones actually granted, and Chrome happily
+    # authorised a personal account that the operator never intended. A refresh token
+    # for the wrong mailbox is the single worst thing this script could produce, so it
+    # is now proven to work before it is allowed anywhere near Secret Manager.
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+
+    print("\nVerifying the token actually works...")
+
+    try:
+        gmail = build("gmail", "v1", credentials=creds, cache_discovery=False)
+        profile = gmail.users().getProfile(userId="me").execute()
+    except HttpError as exc:
+        print(f"\nFAILED: could not read the Gmail profile: {exc}", file=sys.stderr)
+        print("Gmail scopes were probably not granted. Re-run and tick every box.", file=sys.stderr)
         return 1
+
+    authorised = profile.get("emailAddress", "")
+    if authorised.lower() != args.expect_mailbox.lower():
+        print(
+            f"\nFAILED: you authorised {authorised!r}, but Greenroom is configured for "
+            f"{args.expect_mailbox!r}.\n\n"
+            "Nothing has been written. Re-run and sign in as the agent mailbox — use a\n"
+            "private/incognito window, because Chrome will otherwise reuse whichever\n"
+            "account you are already signed into.\n",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"  Gmail    OK — authorised as {authorised} ({profile.get('messagesTotal')} messages)")
+
+    try:
+        calendar = build("calendar", "v3", credentials=creds, cache_discovery=False)
+        primary = calendar.calendars().get(calendarId="primary").execute()
+    except HttpError as exc:
+        print(f"\nFAILED: Calendar access does not work: {exc}\n", file=sys.stderr)
+        print(
+            "The calendar scopes were not granted. Two things to check:\n"
+            "  1. Data Access on the consent screen lists calendar.events and\n"
+            "     calendar.freebusy\n"
+            "     https://console.cloud.google.com/auth/scopes?project=" + project + "\n"
+            "  2. You ticked every permission box on the consent screen.\n"
+            "Nothing has been written.",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"  Calendar OK — primary is {primary.get('id')} ({primary.get('timeZone')})")
 
     client = secretmanager.SecretManagerServiceClient()
     print("\nWriting secrets...")
