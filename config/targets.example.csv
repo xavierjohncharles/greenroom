@@ -1,0 +1,4 @@
+organisation,contact_name,email,venue_notes,tier,context
+Example Students' Union,,events@example-su.ac.uk,"Main hall, 450 capacity",1,"Replace this file with your own list, or add config/targets.csv"
+Another Students' Union,Sam Taylor,venue@another-su.ac.uk,"Two rooms, 200 and 600",2,contact_name is optional; the Writer adapts the greeting
+A Third Students' Union,,hello@third-su.ac.uk,,3,

@@ -16,6 +16,9 @@ import yaml
 from pydantic import ValidationError
 
 from greenroom.config.schemas import Brand, Policy, Target, TargetList
+from greenroom.obs import get_logger
+
+log = get_logger(__name__)
 
 
 class ConfigError(RuntimeError):
@@ -84,7 +87,24 @@ def load_policy(path: Path | None = None) -> Policy:
 
 
 def load_targets(path: Path | None = None) -> TargetList:
-    path = path or config_dir() / "targets.csv"
+    """Load the pipeline, falling back to the shipped example.
+
+    `config/targets.csv` is gitignored: it holds third-party contact addresses,
+    including named individuals at real organisations, and this repo is shared with
+    hackathon judges. Without a fallback, a fresh clone would fail to boot — so the
+    example file keeps the project reproducible while the real list stays out of git.
+    """
+    if path is None:
+        directory = config_dir()
+        path = directory / "targets.csv"
+        if not path.exists():
+            example = directory / "targets.example.csv"
+            if example.exists():
+                log.warning(
+                    "config/targets.csv not found — using targets.example.csv. "
+                    "These are placeholder addresses; nothing real will be contacted."
+                )
+                path = example
     if not path.exists():
         raise ConfigError(f"missing config file: {path}")
 

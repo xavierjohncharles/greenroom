@@ -829,3 +829,43 @@ tag is to make the bucket publicly readable. But posters name real students' uni
 briefs describe a real pipeline, so `/media/{posters,briefs}/{name}` streams them behind
 the same gate as the rest of the dashboard, with a whitelist on the path rather than
 sanitisation of it. Verified: no cookie redirects to login, traversal attempts 404.
+
+---
+
+## Sun 30 Aug — the real target list, and keeping it out of git
+
+Twenty UK students' unions loaded and researched. Two decisions worth recording.
+
+**Deduplicated by organisation.** The list arrived with 27 contacts across 22 unions —
+several unions had two addresses (Royal Holloway's helpdesk *and* its CEO, Leeds'
+helpdesk *and* student groups, Bristol's general inbox *and* its marketing contact).
+Loaded as-is, Greenroom would have pitched the same union twice on different addresses,
+which reads as careless to the recipient and would have been entirely my fault for
+treating a contact list as a target list. One row per organisation now, preferring
+dedicated sales and named individuals over general inboxes, with the alternates preserved
+in `context` so they can be swapped without going back to the source.
+
+The schema's `unique_emails` validator would have caught duplicate *addresses*, and would
+have said nothing about duplicate *organisations*, because that was never a rule I thought
+to write. It still is not — the fix was in the data, not the validator, because "one row
+per organisation" is a judgement about outreach rather than a constraint on the file.
+
+**`config/targets.csv` is now gitignored.** It holds real third-party contact addresses,
+including three named individuals at real organisations, and the README's own checklist
+says to grant repo access to `testing@devpost.com` and `cloudhackathons@google.com`.
+Committing it would have handed those addresses to judges as a side effect of a step I
+wrote myself.
+
+The obvious fix breaks reproducibility: a fresh clone with no `targets.csv` fails to boot,
+because config validation is deliberately fail-fast. So `config/targets.example.csv` ships
+instead and the loader falls back to it with a warning. A judge clones, deploys, and gets
+a working system pointed at placeholder addresses; Xavier's real list is baked into the
+container at deploy time and never reaches git. Confirmed the real list had never been
+committed before untracking — history contains placeholders and Xavier's own address,
+nothing else.
+
+Worth noting what nearly happened. I was about to `git add config/targets.csv` without
+thinking about it, because it is a config file and config files get committed. The thing
+that stopped it was remembering that a step *in my own README* shares this repo with two
+external addresses. Data classification is not a property of a file; it is a property of
+who ends up able to read it.

@@ -245,7 +245,19 @@ Gmail expires it after 7 days; the hourly tick renews it.
 
 ### 10. Fill in the config and go
 
-Edit `config/targets.csv` and `config/policy.yaml`, then:
+**`config/targets.csv` is gitignored.** It holds third-party contact addresses,
+including named individuals at real organisations, and this repo is shared with judges.
+`config/targets.example.csv` ships instead, and the loader falls back to it with a
+warning — so a fresh clone boots and contacts nothing real. Copy it and fill in your own:
+
+```bash
+cp config/targets.example.csv config/targets.csv
+```
+
+The file is baked into the container at deploy time, so your real list reaches Cloud Run
+without ever reaching git.
+
+Edit it and `config/policy.yaml`, then:
 
 ```bash
 curl -X POST "${SERVICE_URL}/admin/sync-targets" -H "Cookie: greenroom_gate=YOUR_SECRET"

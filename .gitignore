@@ -1,4 +1,8 @@
 # ---- Secrets. Nothing credential-shaped ever lands in this repo. ----
+# The real target list holds third-party contact addresses, including named
+# individuals at real organisations. The repo is shared with hackathon judges, so it
+# ships config/targets.example.csv instead and the loader falls back to it.
+config/targets.csv
 .env
 .env.*
 !.env.example
