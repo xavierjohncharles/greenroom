@@ -123,11 +123,17 @@ async def board(request: Request):
 
     window_open, window_reason = _window_state()
     ops = config.policy.operations
+
+    from greenroom.jobs.tick import load_brief
+
+    brief = load_brief(repo)
+
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             **_chrome(request, "board"),
+            "brief": brief if brief.get("summary") else None,
             "targets": targets,
             "total": len(targets),
             "counts": [(s, c) for s, c in counts if c],

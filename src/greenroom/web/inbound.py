@@ -45,18 +45,17 @@ class PushAuthError(RuntimeError):
     """The push request did not carry a valid Pub/Sub OIDC token."""
 
 
-def verify_push_token(request: Request) -> dict[str, Any]:
-    """Verify the OIDC JWT Pub/Sub signs onto the push request.
+def verify_oidc(request: Request, *, allowed: list[str], what: str) -> dict[str, Any]:
+    """Verify a Google-signed OIDC JWT and check it came from an expected identity.
 
-    If no push service account is configured we refuse rather than wave it through:
-    an unauthenticated endpoint that runs agents is a worse default than a broken one.
+    Shared by /inbound (Pub/Sub) and /tick (Cloud Scheduler). Both endpoints run agents
+    and can cause mail to be sent, so both refuse rather than wave a caller through when
+    no identity is configured: an unauthenticated endpoint that sends email is a worse
+    default than a broken one.
     """
-    settings = get_settings()
-    expected_sa = settings.push_sa_email
-    if not expected_sa:
-        raise PushAuthError(
-            "GREENROOM_PUSH_SA_EMAIL is not set; refusing to accept unauthenticated push"
-        )
+    allowed = [a for a in allowed if a]
+    if not allowed:
+        raise PushAuthError(f"no service account configured for {what}; refusing the request")
 
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
@@ -70,19 +69,40 @@ def verify_push_token(request: Request) -> dict[str, Any]:
         claims = id_token.verify_oauth2_token(
             token,
             google_requests.Request(),
-            audience=settings.push_audience or None,
+            audience=get_settings().push_audience or None,
         )
     except Exception as exc:
         raise PushAuthError(f"token verification failed: {exc}") from exc
 
     if claims.get("iss") not in PUBSUB_ISSUERS:
         raise PushAuthError(f"unexpected issuer {claims.get('iss')!r}")
-    if claims.get("email") != expected_sa:
+    if claims.get("email") not in allowed:
         raise PushAuthError(f"unexpected service account {claims.get('email')!r}")
     if not claims.get("email_verified", False):
         raise PushAuthError("service account email is not verified")
 
     return claims
+
+
+def verify_push_token(request: Request) -> dict[str, Any]:
+    """Pub/Sub push: only the configured push identity may post to /inbound."""
+    settings = get_settings()
+    if not settings.push_sa_email:
+        raise PushAuthError(
+            "GREENROOM_PUSH_SA_EMAIL is not set; refusing to accept unauthenticated push"
+        )
+    return verify_oidc(request, allowed=[settings.push_sa_email], what="Pub/Sub push")
+
+
+def verify_tick_token(request: Request) -> dict[str, Any]:
+    """Cloud Scheduler tick: the scheduler identity, or the push identity as a fallback
+    so a single service account deployment still works."""
+    settings = get_settings()
+    return verify_oidc(
+        request,
+        allowed=[settings.scheduler_sa_email, settings.push_sa_email],
+        what="Cloud Scheduler",
+    )
 
 
 def decode_push_body(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:

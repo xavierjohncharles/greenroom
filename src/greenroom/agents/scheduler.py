@@ -319,7 +319,7 @@ class Scheduler:
             )
         return {"message_id": sent.message_id, "dry_run": sent.dry_run}
 
-    def _handle_send_follow_up(self, job: JobDoc) -> dict:
+    async def _handle_send_follow_up(self, job: JobDoc) -> dict:
         """Send a nudge — unless the target already replied, in which case drop it.
 
         The check matters: a follow-up scheduled three days ago must not fire at a
@@ -342,12 +342,24 @@ class Scheduler:
             return {"skipped": True, "reason": "thread closed"}
 
         self._assert_may_send()
+
+        # Follow-ups are queued at pitch time with EMPTY bodies, so that a nudge is not
+        # written a week before it is sent and cannot go out stale. As written, that
+        # also meant it would have gone out blank. The body is drafted here, when the
+        # job actually runs, against the thread as it stands now.
+        subject = job.payload.get("subject") or ""
+        body = job.payload.get("body") or ""
+        if not body.strip():
+            subject, body = await self._draft_follow_up(target, job, thread)
+        if not body.strip():
+            raise RuntimeError("no follow-up body could be drafted; refusing to send blank")
+
         self._reserve()
         try:
             sent = self.gmail.send_reply(
                 to=target.email,
-                subject=job.payload["subject"],
-                body_text=job.payload["body"],
+                subject=subject,
+                body_text=body,
                 thread_id=job.thread_id or "",
                 in_reply_to=job.payload.get("in_reply_to", ""),
             )
@@ -364,6 +376,46 @@ class Scheduler:
                 }
             )
         return {"message_id": sent.message_id, "dry_run": sent.dry_run}
+
+    async def _draft_follow_up(self, target, job: JobDoc, thread) -> tuple[str, str]:
+        """Draft a nudge for a thread that has gone quiet.
+
+        Short, and deliberately not a re-pitch: someone who ignored the first email will
+        not read a longer second one.
+        """
+        from google.adk.agents import LlmAgent
+
+        from greenroom.agents.runtime import run_agent
+        from greenroom.models import GEMINI_MODEL
+
+        day = job.payload.get("day", 3)
+        brand = self.config.brand
+        subject = (thread.subject if thread else "") or "Following up"
+        final = "This is the last follow-up before the thread is closed." if day >= 7 else ""
+
+        agent = LlmAgent(
+            name="follow_up_writer",
+            model=GEMINI_MODEL,
+            description="Writes a short follow-up to an unanswered pitch. Holds no tools.",
+            instruction=(
+                "You write a brief follow-up to a cold email that went unanswered. "
+                "Under 60 words. Do not re-pitch, do not repeat what the first email "
+                "said, do not apologise for following up, and never write 'just "
+                "checking in'. Add one small new reason to reply, or ask one direct "
+                "question. Plain text, British English, no signature block."
+            ),
+        )
+
+        body = await run_agent(
+            agent,
+            f"You are {brand.sender_name} at {brand.company_name}.\n"
+            f"You emailed {target.organisation} {day} days ago and heard nothing.\n"
+            f"Original subject: {subject}\n"
+            f"What we do: {brand.pitch}\n{final}\n"
+            "Write the follow-up.",
+        )
+        reply_subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+        return reply_subject, body.strip()
 
     def _handle_book_call(self, job: JobDoc) -> dict:
         """Create the call. Not gated by the send window — a booking is a confirmation

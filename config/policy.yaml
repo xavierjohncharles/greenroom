@@ -87,9 +87,8 @@ operations:
   send_window:
     timezone: "Europe/London"
     start_hour: 9
-    end_hour: 22
-    weekdays: [0, 1, 2, 3, 4, 5, 6]   # TEMPORARILY widened for the live end-to-end test
-    # RESTORE BEFORE THE DEMO: start_hour 9, end_hour 17, weekdays [0, 1, 2, 3, 4]
+    end_hour: 17
+    weekdays: [0, 1, 2, 3, 4]   # never send at the weekend
   follow_up_days: [3, 7]        # then close as no-reply
   close_after_days: 14
   # Cost ceiling across all model + media calls in a rolling day. Trips the kill switch.

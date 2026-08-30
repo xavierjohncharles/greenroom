@@ -5,6 +5,16 @@
 <p class="sub">{{ total }} targets · {{ sends_today }}/{{ send_cap }} sends today ·
   {% if window_open %}send window open{% else %}{{ window_reason }}{% endif %}</p>
 
+{% if brief %}
+<div class="card" style="border-left: 3px solid var(--cyan)">
+  <div class="row">
+    <strong>Morning brief</strong>
+    <span class="muted" style="margin-left:auto">{{ brief.for_date }}</span>
+  </div>
+  <p style="margin:10px 0 0">{{ brief.summary }}</p>
+</div>
+{% endif %}
+
 <div class="grid">
   {% for status, count in counts %}
   <div class="stat">

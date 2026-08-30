@@ -140,25 +140,37 @@ async def tick(request: Request) -> dict[str, Any]:
     For now it drains the job queue, which is what makes the dashboard's Approve button
     actually result in an email.
     """
-    from greenroom.jobs.inbound import reconcile_owned_threads
-    from greenroom.web.deps import get_scheduler
+    from greenroom.jobs.tick import run_tick
+    from greenroom.web.auth import is_unlocked
+    from greenroom.web.deps import get_queue, get_repo, get_scheduler
+    from greenroom.web.inbound import PushAuthError, verify_tick_token
 
-    tally = await get_scheduler().run_due_jobs(limit=int(request.query_params.get("limit", 10)))
-
-    # Reconcile inbound as well as running jobs. The Gmail watch is the fast path; this
-    # is the guarantee. It covers a missed push, an expired history window, and the
-    # possibility that a label-scoped watch does not fire for replies landing in an
-    # already-labelled thread — which I did not want to bet the demo on.
-    inbound = {}
-    if request.query_params.get("reconcile", "1") != "0":
+    # /tick runs agents and can cause mail to be sent, so it is not open. Cloud Scheduler
+    # authenticates with an OIDC token; a human holding the dashboard cookie may also
+    # trigger it, which is what makes "run the tick" a thing you can do on camera.
+    if not is_unlocked(request):
         try:
-            inbound = await reconcile_owned_threads()
-        except Exception as exc:
-            log.error("reconciliation failed", extra={"error": str(exc)})
-            inbound = {"error": str(exc)}
+            verify_tick_token(request)
+        except PushAuthError as exc:
+            log.warning("tick rejected", extra={"reason": str(exc)})
+            return JSONResponse({"status": "forbidden", "reason": str(exc)}, status_code=403)
 
-    log.info("tick complete", extra={**tally, "inbound": inbound})
-    return {"status": "ok", "jobs": tally, "inbound": inbound}
+    settings = get_settings()
+    topic = (
+        f"projects/{settings.google_cloud_project}/topics/{settings.pubsub_topic}"
+        if settings.google_cloud_project
+        else ""
+    )
+
+    results = await run_tick(
+        get_repo(),
+        get_queue(),
+        get_scheduler(),
+        limit=int(request.query_params.get("limit", 10)),
+        topic=topic,
+    )
+    log.info("tick complete", extra=results)
+    return {"status": "ok", **results}
 
 
 @app.post("/admin/watch")

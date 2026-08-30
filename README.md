@@ -208,6 +208,55 @@ Two independent detectors, combined with OR — either one firing quarantines:
 Measured on the 15-email fixture set in `tests/fixtures/inbound_emails.py`
 (5 attacks, 10 genuine): **regex 4/5, model 15/15, zero false positives on genuine mail.**
 
+## The tick
+
+Cloud Scheduler drives everything periodic. Two jobs, both authenticated with an OIDC
+token that `/tick` verifies — the endpoint runs agents and can cause mail to be sent, so
+it is not open to anyone holding the URL.
+
+| Job | Schedule | Does |
+|---|---|---|
+| `greenroom-tick` | hourly, Europe/London | run due jobs, reconcile inbound, expire veto windows, close stale threads, renew the Gmail watch |
+| `greenroom-morning-brief` | 08:00 Europe/London | the same tick, which also writes the brief and regenerates the style memo |
+
+Each step is isolated: if the brief fails, the follow-ups still go out, and the failure
+appears in the response and in Cloud Trace rather than being silently skipped.
+
+The brief is written **once per day**, checked against the stored brief rather than the
+clock — so an hourly tick produces one brief a day, and a tick that fails at 08:00 still
+produces one at 09:00 instead of skipping the day.
+
+## The trust dial
+
+| Mode | What happens to a draft |
+|---|---|
+| `review` | Nothing sends. It waits on the dashboard. Every target starts here. |
+| `veto` | A send job is queued for 30 minutes' time. Silence becomes consent. |
+| `autopilot` | Queued immediately. |
+
+Three consecutive approvals **with no edits** promote one level; any edit demotes one
+level immediately. Trust is slow to gain and fast to lose.
+
+Two rules override the mode entirely:
+
+* **An escalation is always `review`**, whatever autonomy a target has earned. Earned
+  autonomy is permission to skip review on ordinary replies, never permission to decide
+  outside the policy envelope.
+* **A draft that breaks a copy rule is always `review`**, for the same reason.
+
+The dial measures whether the human *changed the text*, not which button they pressed —
+pressing "Save edit & send" on an untouched draft is an approval.
+
+### The style memo
+
+Regenerated from the diffs between what the Writer produced and what the human actually
+sent. Approvals carry no signal — they only say "this was fine" — so the memo is built
+from edits alone. It is a fixed-size summary that gets rewritten rather than an
+accumulating list of diffs, so twenty edits and two hundred produce a prompt of the same
+length. Below two real edits it produces nothing at all, and the Writer falls back to the
+brand tone notes: a confident wrong memo is worse than an empty one, because the Writer
+will follow it.
+
 ## Durability
 
 Every side effect — an email, a calendar booking, a poster — is a job document with an

@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     # --- Pub/Sub push verification -----------------------------------------
     push_sa_email: str = Field(default="", alias="GREENROOM_PUSH_SA_EMAIL")
     push_audience: str = Field(default="", alias="GREENROOM_PUSH_AUDIENCE")
+    scheduler_sa_email: str = Field(default="", alias="GREENROOM_SCHEDULER_SA_EMAIL")
     pubsub_topic: str = Field(default="greenroom-gmail", alias="GREENROOM_PUBSUB_TOPIC")
 
     # --- Storage ------------------------------------------------------------

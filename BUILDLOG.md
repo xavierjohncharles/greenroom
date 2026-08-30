@@ -645,3 +645,53 @@ That last detail matters more than it looks. Without the header there would be n
 after the fact, to distinguish an attack we staged from an attack somebody actually sent —
 and "was this real?" is a question you only get to answer if you decided in advance to
 record it.
+
+---
+
+## Sun 30 Aug — Steps 6 and 7: trust dial, style memo, tick
+
+201 tests. Cloud Scheduler is driving the tick hourly with an OIDC token, and every step
+reported cleanly on the first real invocation.
+
+**`/tick` is authenticated now.** It runs agents and can cause mail to be sent, so
+leaving it open to anyone with the URL was a hole I had left since step 4 — the endpoint
+existed before there was anything behind it worth protecting, and I never went back. It
+verifies a Cloud Scheduler OIDC token, or the dashboard cookie, which is what keeps "run
+the tick" something you can do on camera.
+
+Wiring Cloud Scheduler needed the same non-obvious IAM step as Pub/Sub: the Cloud
+Scheduler service agent must hold `roles/iam.serviceAccountTokenCreator` on the identity
+it is minting tokens for. Without it, `jobs run` fails silently — no error, no attempt
+recorded, nothing in the logs. Two rounds of "why is nothing happening" before I went
+looking for the agent binding.
+
+**A blank-email bug, found while writing the tick.** Follow-up jobs are queued at pitch
+time with `{"subject": "", "body": ""}`, deliberately, so a nudge is not written a week
+before it is sent. But nothing ever filled them in — the handler read
+`job.payload["body"]` and would have sent an **empty email** on day 3. It had been
+sitting there since step 3, passing every test, because no test had ever let a follow-up
+job actually execute. The body is now drafted when the job runs, against the thread as it
+stands, and the handler refuses to send if drafting produces nothing.
+
+That is the second bug this build that only existed in the gap between "the job is
+queued" and "the job runs". Both were invisible to tests that exercised one half.
+
+**The style memo is a rewritten summary, not an accumulating list.** Feeding raw diffs to
+the Writer works for five edits and gets worse every week after: the prompt grows without
+bound, costs more, and buries the recent signal under the old. A fixed-size memo that is
+regenerated keeps the prompt constant whether there are twenty edits or two hundred, and
+degrades gracefully — a bad memo is one bad paragraph, not a corrupted history.
+
+It refuses to produce anything below two real edits, and it ignores stored "edits" whose
+before and after are identical. That second filter exists because of the trust-dial bug
+found earlier today: for a few hours the system was recording no-op edits, and without
+the filter those would have been fed to the memo generator as if they were style signals.
+A guard against a bug that no longer exists, kept because the data it produced still does.
+
+**The morning brief counts, then narrates.** `gather_brief_facts` does pure Firestore
+reads and hands the model a dict; the model is told to use only those numbers. A model
+asked to both tally and summarise will occasionally do neither accurately, and "3 threads
+need you" has to be true or the brief becomes something you stop reading.
+
+Also restored the send window to Mon-Fri 09:00-17:00. The test that had been deliberately
+red all afternoon is green again — which is exactly the job I gave it.

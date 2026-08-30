@@ -189,3 +189,68 @@ def test_a_notification_for_another_mailbox_is_ignored(monkeypatch):
         )
         assert r.status_code == 200
         assert r.json()["reason"] == "wrong mailbox"
+
+
+# ------------------------------------------------------------------ tick auth
+
+
+def test_the_tick_is_not_open_to_anonymous_callers(monkeypatch):
+    """/tick runs agents and can cause mail to be sent. An unauthenticated caller with
+    the URL must not be able to make the agent act."""
+    from greenroom.settings import Settings, get_settings
+    from greenroom.web import auth
+    from greenroom.web.main import app
+
+    get_settings.cache_clear()
+    monkeypatch.setattr(auth, "is_unlocked", lambda request: False)
+    monkeypatch.setattr(
+        "greenroom.web.inbound.get_settings",
+        lambda: Settings(
+            _env_file=None, GREENROOM_SCHEDULER_SA_EMAIL="sched@x.iam.gserviceaccount.com"
+        ),
+    )
+    with TestClient(app) as client:
+        assert client.post("/tick").status_code == 403
+
+
+def test_a_scheduler_token_is_accepted(monkeypatch):
+    from greenroom.settings import Settings
+    from greenroom.web.inbound import verify_tick_token
+
+    monkeypatch.setattr(
+        "greenroom.web.inbound.get_settings",
+        lambda: Settings(
+            _env_file=None, GREENROOM_SCHEDULER_SA_EMAIL="sched@x.iam.gserviceaccount.com"
+        ),
+    )
+    monkeypatch.setattr(
+        "google.oauth2.id_token.verify_oauth2_token",
+        lambda *a, **k: {
+            "iss": "https://accounts.google.com",
+            "email": "sched@x.iam.gserviceaccount.com",
+            "email_verified": True,
+        },
+    )
+    assert verify_tick_token(_Req({"authorization": "Bearer t"}))["email"].startswith("sched@")
+
+
+def test_a_stranger_token_is_refused_on_the_tick(monkeypatch):
+    from greenroom.settings import Settings
+    from greenroom.web.inbound import PushAuthError, verify_tick_token
+
+    monkeypatch.setattr(
+        "greenroom.web.inbound.get_settings",
+        lambda: Settings(
+            _env_file=None, GREENROOM_SCHEDULER_SA_EMAIL="sched@x.iam.gserviceaccount.com"
+        ),
+    )
+    monkeypatch.setattr(
+        "google.oauth2.id_token.verify_oauth2_token",
+        lambda *a, **k: {
+            "iss": "https://accounts.google.com",
+            "email": "someone-else@evil.iam.gserviceaccount.com",
+            "email_verified": True,
+        },
+    )
+    with pytest.raises(PushAuthError, match="unexpected service account"):
+        verify_tick_token(_Req({"authorization": "Bearer t"}))
