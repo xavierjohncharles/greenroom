@@ -147,13 +147,13 @@ def main() -> int:
             "\nFAILED: CSRF state mismatch.\n\n"
             "This means the browser completed an authorisation from an EARLIER run of\n"
             "this script. Each run generates a fresh state value, so an old tab landing\n"
-            "on http://localhost:%d is rejected.\n\n"
+            f"on http://localhost:{args.port} is rejected.\n\n"
             "To fix it:\n"
             "  1. Quit the private/incognito window completely (Cmd-Shift-W), so no old\n"
             "     tab can fire a callback.\n"
             "  2. Re-run this script.\n"
             "  3. Copy the NEW url it prints — not one from scrollback.\n\n"
-            "Nothing has been written." % args.port,
+            "Nothing has been written.",
             file=sys.stderr,
         )
         return 1
