@@ -263,3 +263,45 @@ async def test_a_duplicate_delivery_is_processed_once(wired, repo):
     assert first == "processed"
     assert second == "duplicate"
     assert len(repo.list_drafts()) == 1, "exactly one draft, not two"
+
+
+async def test_concurrent_deliveries_of_the_same_message_draft_once(wired, repo):
+    """Regression: three retried Pub/Sub notifications arrived together, all three read
+    "not seen yet" before any wrote, and all three drafted a reply to the same email.
+    The dedupe was a check-then-write; it is now an atomic create()."""
+    import asyncio
+
+    wired("question_whats_included")
+    from greenroom.jobs.inbound import process_message
+
+    outcomes = await asyncio.gather(
+        *[
+            process_message(
+                message_id=MESSAGE_ID, thread_id=THREAD_ID, owned=frozenset({THREAD_ID})
+            )
+            for _ in range(3)
+        ]
+    )
+
+    assert outcomes.count("processed") == 1, f"exactly one must process, got {outcomes}"
+    assert outcomes.count("duplicate") == 2
+    assert len(repo.list_drafts()) == 1, "one email, one draft"
+
+
+async def test_a_screening_failure_releases_the_claim(wired, repo, monkeypatch):
+    """A claim that outlives a transient failure would silently drop a real reply."""
+    wired("interested")
+    from greenroom.jobs import inbound
+
+    async def boom(**_kwargs):
+        raise RuntimeError("gemini unavailable")
+
+    monkeypatch.setattr("greenroom.agents.gatekeeper.screen", boom)
+    with pytest.raises(RuntimeError):
+        await inbound.process_message(
+            message_id=MESSAGE_ID, thread_id=THREAD_ID, owned=frozenset({THREAD_ID})
+        )
+
+    assert not repo._col("messages").document(MESSAGE_ID).get().exists, (
+        "the claim must be released so a retry can reprocess"
+    )

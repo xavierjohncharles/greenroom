@@ -94,7 +94,27 @@ async def process_history(*, history_id: str, pubsub_message_id: str = "") -> di
         return {"processed": 0, "reason": "baseline set"}
 
     owned = repo.owned_thread_ids()
-    records = gmail.history_since(start)
+
+    try:
+        records = gmail.history_since(start)
+    except Exception as exc:
+        # Gmail returns 404 when a startHistoryId is too old or was never valid — its
+        # history window is finite, and a bogus id (ours came from a synthetic Pub/Sub
+        # test message) never existed at all. Retrying cannot fix either case, so
+        # Pub/Sub would redeliver until the retention window expired.
+        #
+        # The documented recovery is a full resync. We do the scoped equivalent: reset
+        # the baseline and walk the threads we own. That also happens to be the
+        # belt-and-braces path for label-scoped watches not firing on replies into an
+        # existing thread, so it earns its place twice.
+        if "notFound" in str(exc) or "404" in str(exc):
+            log.warning(
+                "gmail history unavailable, falling back to thread reconciliation",
+                extra={"start_history_id": start, "error": str(exc)[:200]},
+            )
+            set_last_history_id(repo, history_id)
+            return await reconcile_owned_threads(owned=owned)
+        raise
 
     seen: set[str] = set()
     processed = quarantined = skipped = 0
@@ -136,6 +156,51 @@ async def process_history(*, history_id: str, pubsub_message_id: str = "") -> di
     return {"processed": processed, "quarantined": quarantined, "skipped": skipped}
 
 
+async def reconcile_owned_threads(*, owned: frozenset[str] | None = None) -> dict[str, Any]:
+    """Walk every thread Greenroom owns and process anything not already recorded.
+
+    Strictly bounded by our own threads, so it can never read anything outside
+    Greenroom's footprint no matter how it is triggered. Used as the recovery path when
+    Gmail history is unavailable, and by the hourly tick as a safety net.
+    """
+    repo, _, scheduler = _deps()
+    owned = owned if owned is not None else repo.owned_thread_ids()
+
+    processed = quarantined = skipped = 0
+    for thread_id in owned:
+        try:
+            messages = scheduler.gmail.get_thread(thread_id, owned_thread_ids=owned)
+        except Exception as exc:
+            log.warning(
+                "could not read owned thread", extra={"thread_id": thread_id, "error": str(exc)}
+            )
+            continue
+
+        for message in messages:
+            if repo._col("messages").document(message.message_id).get().exists:
+                continue
+            outcome = await process_message(
+                message_id=message.message_id, thread_id=thread_id, owned=owned
+            )
+            if outcome == "quarantined":
+                quarantined += 1
+            elif outcome == "processed":
+                processed += 1
+            else:
+                skipped += 1
+
+    log.info(
+        "thread reconciliation complete",
+        extra={"threads": len(owned), "processed": processed, "quarantined": quarantined},
+    )
+    return {
+        "processed": processed,
+        "quarantined": quarantined,
+        "skipped": skipped,
+        "via": "reconciliation",
+    }
+
+
 async def process_message(*, message_id: str, thread_id: str, owned: frozenset[str]) -> str:
     """Screen, store and route one inbound message. Returns what happened to it."""
     from greenroom.agents.gatekeeper import screen
@@ -143,9 +208,29 @@ async def process_message(*, message_id: str, thread_id: str, owned: frozenset[s
     repo, _queue, scheduler = _deps()
     settings = get_settings()
 
-    # Dedupe first: Pub/Sub is at-least-once, and running the Gatekeeper twice on the
-    # same message would be wasteful; drafting twice would be worse.
-    if repo._col("messages").document(message_id).get().exists:
+    # Claim the message atomically. Pub/Sub is at-least-once, and this ran as a
+    # check-then-write: three retried notifications arrived together, all three read
+    # "not seen yet" before any of them wrote, and all three drafted a reply to the same
+    # email. The read was fine; the gap between read and write was not.
+    #
+    # `create()` fails if the document exists, so exactly one caller wins the race. The
+    # claim is written BEFORE the Gatekeeper runs, so a crash mid-screening leaves a
+    # claimed-but-unprocessed message rather than a duplicate reply — the safer failure.
+    from google.api_core import exceptions as gcp_exc
+
+    message_ref = repo._col("messages").document(message_id)
+    try:
+        message_ref.create(
+            {
+                "gmail_message_id": message_id,
+                "gmail_thread_id": thread_id,
+                "direction": "inbound",
+                "processing": True,
+                "created_at": utcnow(),
+                "updated_at": utcnow(),
+            }
+        )
+    except gcp_exc.AlreadyExists:
         log.info("duplicate inbound message ignored", extra={"gmail_message_id": message_id})
         return "duplicate"
 
@@ -177,11 +262,17 @@ async def process_message(*, message_id: str, thread_id: str, owned: frozenset[s
     if _same_address(inbound_msg.from_addr, settings.agent_mailbox):
         return "skipped"
 
-    verdict = await screen(
-        subject=inbound_msg.subject, sender=inbound_msg.from_addr, body=inbound_msg.body_text
-    )
+    try:
+        verdict = await screen(
+            subject=inbound_msg.subject, sender=inbound_msg.from_addr, body=inbound_msg.body_text
+        )
+    except Exception:
+        # Release the claim: a screening failure is transient and the message has not
+        # been dealt with. Leaving the claim would silently drop a real reply.
+        message_ref.delete()
+        raise
 
-    repo._col("messages").document(message_id).set(
+    message_ref.set(
         MessageDoc(
             gmail_message_id=message_id,
             gmail_thread_id=thread_id,
@@ -197,6 +288,7 @@ async def process_message(*, message_id: str, thread_id: str, owned: frozenset[s
             quarantine_reason=verdict.quarantine_reason,
             injection_flags=verdict.injection_flags,
         ).model_dump()
+        | {"processing": False}
     )
     repo._col("threads").document(thread_id).update(
         {"last_inbound_at": utcnow(), "last_message_at": utcnow(), "updated_at": utcnow()}

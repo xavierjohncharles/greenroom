@@ -140,11 +140,25 @@ async def tick(request: Request) -> dict[str, Any]:
     For now it drains the job queue, which is what makes the dashboard's Approve button
     actually result in an email.
     """
+    from greenroom.jobs.inbound import reconcile_owned_threads
     from greenroom.web.deps import get_scheduler
 
     tally = await get_scheduler().run_due_jobs(limit=int(request.query_params.get("limit", 10)))
-    log.info("tick complete", extra=tally)
-    return {"status": "ok", **tally}
+
+    # Reconcile inbound as well as running jobs. The Gmail watch is the fast path; this
+    # is the guarantee. It covers a missed push, an expired history window, and the
+    # possibility that a label-scoped watch does not fire for replies landing in an
+    # already-labelled thread — which I did not want to bet the demo on.
+    inbound = {}
+    if request.query_params.get("reconcile", "1") != "0":
+        try:
+            inbound = await reconcile_owned_threads()
+        except Exception as exc:
+            log.error("reconciliation failed", extra={"error": str(exc)})
+            inbound = {"error": str(exc)}
+
+    log.info("tick complete", extra={**tally, "inbound": inbound})
+    return {"status": "ok", "jobs": tally, "inbound": inbound}
 
 
 @app.post("/admin/watch")

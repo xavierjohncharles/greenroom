@@ -555,3 +555,52 @@ Firestore to show Xavier what the agent had learned from him — and finding it 
 Making the system's internal state legible is what caught it, which is an argument for
 the trace and the decisions collection being visible in the dashboard rather than merely
 recorded.
+
+---
+
+## Sun 30 Aug — inbound closed the loop, and two bugs it took to get there
+
+A real reply came back, was screened, evaluated against policy, and escalated:
+
+```
+inbound     : "£600 budget, Great Hall, about 1200 capacity. Does that work?"
+target      : escalated
+policy rule : fee.floor = 850, escalate.max_attendees = 600, escalate.unmatched_requests = true
+draft       : pending, review mode, holding reply that agrees to nothing
+```
+
+Three rules cited at once, each with the configured value, and a drafted reply that
+acknowledges the ask without conceding it. That is the "negotiates within guardrails"
+claim doing something real rather than being asserted in a README.
+
+**Bug one: a poisoned history baseline, retried forever.** `/inbound` was failing with
+`404 notFound` on `history.list`. The stored `last_history_id` was `12345` — the fake
+value from a synthetic Pub/Sub message I published while testing push authentication
+hours earlier. It was adopted as the baseline, and Gmail 404s on a historyId that never
+existed. We returned 500, Pub/Sub retried, and it would have retried until the retention
+window expired.
+
+Gmail's documented recovery for a 404 there is a full resync. We do the scoped
+equivalent: reset the baseline and walk the threads we own, processing anything not
+already recorded. That reconciler now also runs on every tick, which retires the risk I
+flagged in the Stage One verification — that a label-scoped watch might not fire for
+replies landing in an already-labelled thread. The watch is the fast path; the
+reconciler is the guarantee. It earned its place twice.
+
+**Bug two: three identical drafts for one email.** When the fix deployed, all the queued
+Pub/Sub retries fired at once. Each checked "is this message already recorded?", all
+three saw *no* before any of them wrote, and all three ran the Gatekeeper and drafted a
+reply. The dedupe was a check-then-write; the read was fine, the gap between read and
+write was not.
+
+It is now an atomic `create()` on the message document — the same pattern the job queue
+has used since step 3, which I simply failed to apply here. The claim is written *before*
+the Gatekeeper runs, so a crash mid-screening leaves a claimed-but-unprocessed message
+rather than a duplicate reply, and a screening failure explicitly releases the claim so a
+retry can legitimately reprocess. Both directions have tests, including one that fires
+three concurrent deliveries and asserts exactly one draft.
+
+Worth noting that this bug was invisible in every test I had written, because every test
+called the pipeline once. It took real at-least-once delivery with real retry timing to
+expose it — which is the argument for testing against real Firestore and real Pub/Sub
+rather than a mock that always behaves.
