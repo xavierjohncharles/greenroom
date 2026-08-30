@@ -133,12 +133,10 @@ class GmailTool:
         Creating a label is the one write we make outside our own threads, and it
         touches no message.
         """
+        # NOT gated by dry-run. Dry-run exists to stop mail reaching a human, and a
+        # label is not a send. Gating setup behind it meant inbound could not be wired
+        # up without first going live on sends, which is exactly backwards.
         wanted = [self.label_root, self.label_escalated, self.label_quarantine]
-        if self.dry_run:
-            self._label_ids = {n: f"DRYRUN_{n}" for n in wanted}
-            log.info("dry-run: would ensure labels", extra={"labels": wanted})
-            return self._label_ids
-
         existing = {
             lb["name"]: lb["id"]
             for lb in self.svc.users().labels().list(userId=USER_ID).execute().get("labels", [])
@@ -173,11 +171,9 @@ class GmailTool:
 
     def add_label(self, thread_id: str, label_name: str) -> None:
         """Add-only. There is deliberately no remove_label counterpart."""
-        if self.dry_run:
-            log.info(
-                "dry-run: would add label",
-                extra={"thread_id": thread_id, "label": label_name},
-            )
+        if thread_id.startswith("DRYRUN"):
+            # A thread that was never really created has nothing to label.
+            log.info("dry-run thread, skipping label", extra={"label": label_name})
             return
         self.svc.users().threads().modify(
             userId=USER_ID,
@@ -382,10 +378,8 @@ class GmailTool:
         renews it. Requires roles/pubsub.publisher on the topic for
         gmail-api-push@system.gserviceaccount.com.
         """
-        if self.dry_run:
-            log.info("dry-run: would start gmail watch", extra={"topic": topic_name})
-            return {"historyId": "DRYRUN", "expiration": "0"}
-
+        # Also not gated by dry-run: registering a watch sends nothing. Without this,
+        # dry-run mode could never demonstrate the inbound path at all.
         response = (
             self.svc.users()
             .watch(

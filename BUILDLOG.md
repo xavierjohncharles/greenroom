@@ -430,3 +430,41 @@ Two lessons, both about defaults. A default that is *convenient* hides the code 
 where it is absent — the bug existed the whole time and only appeared when the default
 went away. And an empty string is the worst possible default for anything used in a
 containment check, because `""` is a substring of everything.
+
+---
+
+## Sun 30 Aug — OAuth finally live, and the mistake that cost four rounds
+
+`beatid.greenroom@gmail.com` is authorised, all four scopes granted, both secrets in
+Secret Manager, the three `greenroom` labels created in the mailbox, and the Gmail watch
+registered against the Pub/Sub topic (expires Sun 6 Sep — the tick renews it).
+
+**Three of the four failed rounds were my fault, and in an instructive way.** The
+verification probe called `calendars().get(calendarId="primary")` — which reads calendar
+*metadata* and requires the full `calendar` or `calendar.readonly` scope. Greenroom
+requests neither and needs neither. So a completely valid token returned
+`403 insufficient scopes`, my error message confidently blamed the consent screen, and
+the operator went round the OAuth loop three times fixing something that was never
+broken.
+
+The probe was testing an adjacent capability rather than the granted one. `calendar.events`
+grants `events.list` and `events.insert`; it does not grant reading the calendar's own
+metadata. Those are different permissions and I treated them as interchangeable.
+
+What actually ended it was printing the scopes Google returned in the raw token response.
+The moment that showed all four scopes granted *and* the Calendar call still failing, the
+fault had to be in the probe. That one line of diagnostic output should have been in the
+script from the first version — it is the difference between "something is wrong with your
+consent screen" and "something is wrong with my probe", and I spent three rounds asserting
+the first without evidence.
+
+Related: **dry-run was gating the wrong things.** `ensure_labels` and `start_watch` were
+both behind the dry-run flag, so registering a watch returned `historyId: DRYRUN` and
+created no labels. But dry-run exists to stop mail reaching a human, and neither of those
+sends anything. Gating them meant the inbound path could not be wired up without first
+going live on sends — exactly backwards. Dry-run now gates sends and calendar writes only,
+with a test that fails if anyone re-gates setup.
+
+The mailbox change turned out well beyond fixing the Zoho problem: `beatid.greenroom@gmail.com`
+contains nothing but Greenroom's own threads, so the demo shows a clean inbox and the
+containment rules have almost nothing left to contain.

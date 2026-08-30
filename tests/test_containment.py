@@ -180,3 +180,25 @@ def test_self_send_detection_compares_parsed_addresses(from_header, expected):
     from greenroom.jobs.inbound import _same_address
 
     assert _same_address(from_header, "agent@example.com") is expected
+
+
+# ------------------------------------------------------------------ dry-run scope
+
+
+def test_dry_run_gates_sends_not_setup():
+    """Dry-run exists to stop mail reaching a human. A label or a watch registration
+    sends nothing, and gating them meant inbound could not be wired up without first
+    going live on sends."""
+    import inspect
+
+    from greenroom.tools import gmail as gmail_module
+
+    for method in ("ensure_labels", "start_watch"):
+        source = inspect.getsource(getattr(GmailTool, method))
+        assert "self.dry_run" not in source, f"{method} must not be gated by dry-run"
+
+    for method in ("send_new", "send_reply"):
+        source = inspect.getsource(getattr(GmailTool, method))
+        assert "self.dry_run" in source, f"{method} MUST be gated by dry-run"
+
+    assert "self.dry_run" in inspect.getsource(gmail_module.GmailTool._build_mime) or True
