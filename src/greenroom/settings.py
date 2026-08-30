@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     # --- Storage ------------------------------------------------------------
     poster_bucket: str = Field(default="", alias="GREENROOM_POSTER_BUCKET")
 
+    # Image generation costs money but contacts nobody, so it is a separate switch
+    # from dry_run rather than borrowing it. Set false to develop without spending.
+    generate_posters: bool = Field(default=True, alias="GREENROOM_GENERATE_POSTERS")
+
     # --- Gmail labels -------------------------------------------------------
     label_root: str = Field(default="greenroom", alias="GREENROOM_LABEL")
 

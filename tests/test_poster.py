@@ -131,3 +131,19 @@ def test_every_date_line_fits_the_poster():
         "x" * 300,
     ):
         assert len(tidy_date_line(raw)) <= MAX_DATE_CHARS
+
+
+def test_poster_generation_is_not_gated_by_dry_run():
+    """Dry-run means "contact nobody". Generating an image contacts nobody.
+
+    Gating it produced a dry-run pipeline with twenty drafts and zero posters that
+    reported complete success — worse than either sending or not sending. Cost is a
+    separate concern with its own switch.
+    """
+    import inspect
+
+    from greenroom.agents.scheduler import Scheduler
+
+    source = inspect.getsource(Scheduler._handle_generate_poster)
+    assert "dry_run=self.dry_run" not in source
+    assert "generate_posters" in source

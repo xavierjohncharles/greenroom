@@ -869,3 +869,35 @@ thinking about it, because it is a config file and config files get committed. T
 that stopped it was remembering that a step *in my own README* shares this repo with two
 external addresses. Data classification is not a property of a file; it is a property of
 who ends up able to read it.
+
+---
+
+## Sun 30 Aug — twenty real unions, and dry-run gating the wrong thing again
+
+All 20 targets researched, drafted and postered. 61 jobs, zero failures.
+
+**The research is the part I would show a sceptic.** Every one of the twenty found a
+specific, current hook without help — Nottingham Trent's venue winning Best Bar None Live
+Music Venue, Leeds celebrating the 25th anniversary of Fruity during Welcome Week,
+Edinburgh's Potterrow returning from hiatus, Birmingham's SU bar reopening as
+"Wetherspoon @ Joe's", Leicester's April announcement about the O2 Academy. Twenty for
+twenty, all dated 2026, none of them the kind of thing a mail merge produces. The recency
+rule added after the 2009 Blur incident is doing exactly what it was added for.
+
+**And dry-run was gating poster generation, which is the third time.** The first drain
+produced twenty drafts and zero posters, and reported complete success — every job `done`,
+nothing failed, `poster_url` empty on all twenty.
+
+Same mistake as `ensure_labels` and `start_watch` in step 5, made again in step 8 without
+noticing the pattern I had already written down. Dry-run means *contact nobody*. Generating
+an image contacts nobody. What it does is cost money — which is a real concern and a
+completely different one, so it now has its own switch (`GREENROOM_GENERATE_POSTERS`)
+rather than borrowing a safety flag.
+
+The general shape: a flag named for one concern will get reused for a second concern it
+merely correlates with, and the correlation will break somewhere you are not looking. The
+tell here was a success report that was false — twenty green jobs and no artefacts — which
+is worse than a failure, because a failure is visible.
+
+There is now a test asserting the poster handler does not reference `self.dry_run`, which
+is the third variant of a test I keep having to write.

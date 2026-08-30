@@ -183,13 +183,20 @@ class Scheduler:
         target = self._require_target(job)
         research = target.research or {}
 
+        # NOT gated by dry-run — the third time this distinction has come up, after the
+        # Gmail labels and the watch. Dry-run means "contact nobody", and generating an
+        # image contacts nobody. Gating it produced twenty drafts with no posters and a
+        # pipeline reporting complete success, which is worse than either outcome.
+        #
+        # It does cost money. That is a different concern from safety and gets its own
+        # switch rather than borrowing this one.
         poster = make_poster(
             target_id=target.target_id,
             organisation=target.organisation,
             venue=research.get("venue_name", "") or target.venue_notes[:40],
             # Passed whole: the prompt module decides whether it fits or falls back.
             date_line=research.get("freshers_timing", ""),
-            dry_run=self.dry_run,
+            dry_run=not get_settings().generate_posters,
         )
         self.repo._col("targets").document(target.target_id).update(
             {"poster_url": poster.public_url or poster.gcs_uri, "updated_at": utcnow()}
