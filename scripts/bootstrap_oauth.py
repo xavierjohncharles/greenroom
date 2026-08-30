@@ -65,6 +65,14 @@ def main() -> int:
         default=None,
         help="the mailbox that must be authorised (defaults to the configured agent mailbox)",
     )
+    parser.add_argument(
+        "--open-browser",
+        action="store_true",
+        help=(
+            "open the default browser instead of printing the URL. Off by default: the "
+            "default browser reuses whichever Google account is already signed in."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.expect_mailbox:
@@ -102,10 +110,31 @@ def main() -> int:
     print()
 
     flow = InstalledAppFlow.from_client_secrets_file(str(client_path), scopes=list(SCOPES))
-    # access_type=offline + prompt=consent guarantees a refresh token even if this
+
+    # `access_type=offline` + `prompt=consent` guarantee a refresh token even if this
     # account has consented before; without prompt=consent Google returns none on a
     # repeat authorisation and the deployed agent silently cannot refresh.
-    creds = flow.run_local_server(port=args.port, access_type="offline", prompt="consent")
+    #
+    # `select_account` and `login_hint` exist because of two failed runs: opening the
+    # default browser meant Chrome silently reused the account already signed in, and
+    # authorised a personal inbox twice in a row. The browser is now NOT opened by
+    # default — the URL is printed for pasting into a private window, which is the only
+    # reliable way to control which account consents.
+    creds = flow.run_local_server(
+        port=args.port,
+        open_browser=args.open_browser,
+        authorization_prompt_message=(
+            "\n" + "=" * 70 + "\n"
+            "  COPY THE URL BELOW into a PRIVATE / INCOGNITO window.\n"
+            f"  Sign in as: {args.expect_mailbox}\n"
+            "  Do not open it in your normal browser — it will reuse the account you\n"
+            "  are already signed into.\n" + "=" * 70 + "\n\n{url}\n\n"
+            "Waiting for you to finish in the browser...\n"
+        ),
+        access_type="offline",
+        prompt="select_account consent",
+        login_hint=args.expect_mailbox,
+    )
 
     if not creds.refresh_token:
         print(
