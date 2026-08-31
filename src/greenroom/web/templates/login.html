@@ -2,7 +2,17 @@
 {% block title %}Unlock — Greenroom{% endblock %}
 {% block content %}
 <h1>Unlock</h1>
-<p class="sub">Demo gate. A single shared secret, documented as such — this is not authentication.</p>
+<p class="sub">Demo gate. A single shared secret, documented as such — this is not
+authentication. The service has to be publicly reachable for Pub/Sub push; this keeps a
+crawler away from the approve buttons and the target list.</p>
+<div class="card" style="border-left:3px solid var(--cyan)">
+  <strong>Hackathon judges</strong>
+  <p class="muted" style="margin:6px 0 0">The secret is in the Devpost submission notes —
+  deliberately not in the repository, since that is shared with
+  <span class="mono">testing@devpost.com</span> and
+  <span class="mono">cloudhackathons@google.com</span>.
+  The service runs in dry-run, so nothing you click can send mail.</p>
+</div>
 <div class="card">
   <form method="post" action="/login">
     <input type="hidden" name="next" value="{{ next }}">

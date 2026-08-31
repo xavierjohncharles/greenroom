@@ -974,3 +974,42 @@ was fine when written and became a *past* timestamp once the wall clock passed i
 job enqueued now was not due before it, and the kill-switch test failed for a reason that
 had nothing to do with kill switches. Same shape as the Saturday fixture in step 3. Both
 are now computed forward from `now`, so they cannot expire.
+
+---
+
+## Mon 31 Aug — judge access, and the booking claim finally proven
+
+**Judges could not use the hosted URL.** The rules require "a URL to hosted project for
+testing" with access for two Devpost addresses, and an anonymous visit 303'd to a login
+wall. A judge who cannot open the app scores what they can see.
+
+My first fix was to put the shared secret in the README — and the sandbox blocked the
+write, correctly. Even a demo gate's secret is a credential, and the README is in a repo
+whose own checklist says to share it with two external addresses. The secret now goes in
+the Devpost submission notes, which is a private form to specific judges rather than a
+git object with history. The README and the login page both say where to find it and that
+the service is in dry-run, so nothing a judge clicks can send mail.
+
+That is the second time today a habit nearly beat a rule: committing `targets.csv`
+because config files get committed, and committing a secret because READMEs explain how
+to use things.
+
+**The booking claim had never once executed.** "Books calls into my calendar" is in the
+one-line pitch and on the architecture diagram, and `book_call` jobs run to date: zero.
+The code existed and was tested against a stub. Proven now, through the real path — job
+queued, Scheduler claimed it, real event in the agent's calendar, target moved
+`replied → booked`, and a second run with the same idempotency key returned the same
+event id rather than double-booking.
+
+**And proving it exposed a genuine containment gap.** `create_event` uses
+`sendUpdates="all"`, which emails the attendee. So a booking could reach somebody's inbox
+without Gmail being involved at all — the send allow-list, the thing that guarantees
+Greenroom only ever contacts organisations on the list, had a second door it did not
+cover. Gmail checked `targets.csv` on every send; Calendar checked nothing.
+
+Nobody would have found that by reading the Gmail tool, which is where all the
+containment work and all the containment tests live. It took exercising the other tool
+against the real API to notice that "outbound contact" is a larger category than "email
+we send". `create_event` now applies the same check, with tests in both directions.
+
+242 tests.

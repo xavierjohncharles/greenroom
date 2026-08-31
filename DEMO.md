@@ -1,6 +1,6 @@
 # Demo run sheet
 
-Target: **3 minutes**, unedited, one take. Everything below is real — no mock data on
+Target: **under 4 minutes** (the rules evaluate only the first four), unedited, one take. Everything below is real — no mock data on
 screen except the seeded pipeline board, which is labelled as such in the repo.
 
 **Service:** https://greenroom-29925954133.europe-west2.run.app
@@ -109,12 +109,40 @@ Show `"quarantined": 1`. Open the quarantine view.
 > agent holds no send tool anyway, and the Scheduler re-checks every recipient against my
 > target list before anything leaves."
 
-### 2:50 — Where it runs (10s)
+### 2:50 — It books the call (30s)
 
-Cloud Run console, then Cloud Trace.
+Open a target that reached `booked`, or run one live:
 
-> "One Cloud Run service, Firestore for state, Gmail watch through Pub/Sub for inbound,
-> Cloud Scheduler on the tick, and a span per agent and per tool call in Cloud Trace."
+```bash
+uv run python scripts/book_demo_call.py
+```
+
+Switch to Google Calendar in the agent's account.
+
+> "When a deal is inside policy, it books the call itself. Free/busy comes from my real
+> calendar, the slots it offers come from my policy file, and the booking is idempotent —
+> a retried job collides with the existing event rather than double-booking me."
+
+### 3:20 — Where it runs, and how you audit it (30s)
+
+Cloud Run console — point at the `*.run.app` URL and the region. Then the **Reasoning
+trace** panel on a target page, and click through to Cloud Trace.
+
+> "One Cloud Run service, Firestore for state, Gmail watch through Pub/Sub, Cloud
+> Scheduler on the tick. And every step is a span — here's a single trace: the tick, the
+> researcher agent, the model call underneath it, with timings. The dashboard shows what
+> it decided, Cloud Trace shows how long it took, and every line links between them."
+
+Trace to have open beforehand:
+
+```
+/tick                                24183ms
+  tick  (entrypoint)                 24170ms
+    agent.researcher                 22414ms   tools=2  output_chars=1062
+      invoke_agent researcher        21716ms
+        call_llm                     21618ms
+          generate_content gemini-3.5-flash   21616ms
+```
 
 ---
 
@@ -126,6 +154,8 @@ Cloud Run console, then Cloud Trace.
 | Draft does not appear | Run the tick twice; research and drafting are separate jobs. |
 | Inbound not picked up | The tick reconciles owned threads; a second tick catches it. |
 | Poster missing | The pitch sends without it by design. Move on. |
+| Poster 429s | Image quota. It requeues itself — say so, it is the failure handling working. |
+| Trace panel empty | Traces take ~30s to appear. Have one open in a tab beforehand. |
 
 ## After
 

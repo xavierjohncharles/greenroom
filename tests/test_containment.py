@@ -207,3 +207,41 @@ def test_dry_run_gates_sends_not_setup():
         assert "self.dry_run" in source, f"{method} MUST be gated by dry-run"
 
     assert "self.dry_run" in inspect.getsource(gmail_module.GmailTool._build_mime) or True
+
+
+# ------------------------------------------------------------------ calendar reach
+
+
+def test_a_booking_cannot_invite_someone_outside_the_allow_list():
+    """A calendar invite is outbound contact: `sendUpdates="all"` emails the attendee,
+    so a booking could reach an inbox without Gmail being involved. The send allow-list
+    had a second door it did not cover."""
+    from datetime import UTC, datetime, timedelta
+
+    from greenroom.tools.calendar import CalendarTool, Slot
+
+    start = datetime(2026, 9, 15, 10, 0, tzinfo=UTC)
+    with pytest.raises(SendRefused, match="not in config/targets.csv"):
+        CalendarTool(dry_run=True).create_event(
+            summary="Call",
+            description="",
+            slot=Slot(start, start + timedelta(minutes=30)),
+            attendee_email="stranger@somewhere-else.example",
+            idempotency_key="k",
+        )
+
+
+def test_a_booking_for_an_allow_listed_target_is_permitted():
+    from datetime import UTC, datetime, timedelta
+
+    from greenroom.tools.calendar import CalendarTool, Slot
+
+    start = datetime(2026, 9, 15, 10, 0, tzinfo=UTC)
+    booked = CalendarTool(dry_run=True).create_event(
+        summary="Call",
+        description="",
+        slot=Slot(start, start + timedelta(minutes=30)),
+        attendee_email=next(iter(get_config().allowed_addresses)),
+        idempotency_key="k",
+    )
+    assert booked.dry_run is True

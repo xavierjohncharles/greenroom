@@ -136,6 +136,15 @@ class CalendarTool:
         collides with the existing event rather than double-booking. Google requires
         event ids to be base32hex-ish and 5-1024 chars.
         """
+        # Calendar invites are outbound contact too. `sendUpdates="all"` emails the
+        # attendee, so a booking can reach someone's inbox without Gmail being involved
+        # at all — which meant the send allow-list, the thing that guarantees Greenroom
+        # only ever contacts organisations on the list, had a second door it did not
+        # cover. Same check as a send, for the same reason.
+        from greenroom.tools.gmail import assert_allowed_recipient
+
+        attendee_email = assert_allowed_recipient(attendee_email)
+
         policy = get_config().policy.meetings
         event_id = _sanitise_event_id(idempotency_key)
 

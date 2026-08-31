@@ -24,7 +24,31 @@ First customer: **Beat ID Ltd** — a live guess-the-song night, think Kahoot bu
 | [`/health`](https://greenroom-29925954133.europe-west2.run.app/health) | container up, config validated, model in use |
 | [`/readyz`](https://greenroom-29925954133.europe-west2.run.app/readyz) | Firestore reachable |
 | [`/hello`](https://greenroom-29925954133.europe-west2.run.app/hello) | ADK → Gemini 3.5 Flash round trip |
-| `/` | the dashboard — board, drafts, quarantine, settings *(behind a shared-secret gate)* |
+| `/` | the dashboard — board, drafts, quarantine, settings |
+
+### For judges
+
+The dashboard is behind a single shared secret in a cookie — a demo gate, not
+authentication. The service must be publicly reachable for Pub/Sub push, and this keeps a
+crawler away from the approve buttons and the target list.
+
+**The secret is in the Devpost submission notes**, deliberately not in this repository:
+it is still a credential, and this repo is shared with external addresses. Paste it at
+[`/login`](https://greenroom-29925954133.europe-west2.run.app/login).
+
+**The service runs with `GREENROOM_DRY_RUN=true`**, so nothing you click can deliver
+mail. Approving a draft queues a send job, the Scheduler executes it, and the send is
+logged rather than delivered — the whole path runs and stops at the last step. Clicking
+Approve on a target and then running the tick is the loop, end to end, safely.
+
+Worth looking at:
+
+| Where | What it shows |
+|---|---|
+| `/` | 20 real UK students' unions, each researched independently |
+| `/target/<id>` | the sourced hook, the generated poster, the draft, and the **reasoning trace** linking into Cloud Trace |
+| `/quarantine` | inbound the Gatekeeper refused, and why |
+| `/settings` | the kill switch and per-target trust mode |
 
 ---
 
@@ -535,6 +559,21 @@ at 3:4 and centre-cropped, which is why the prompt insists on clear space below 
 line of text.
 
 ---
+
+## Booking
+
+When a reply is inside policy, Greenroom books the call itself. Free/busy comes from the
+agent's real calendar via `freebusy` — times only, never the contents of other meetings —
+and the slots it offers are the intersection of that with `policy.yaml`'s meeting rules,
+so a time in an email is always one the owner would have offered.
+
+The job's idempotency key becomes the Calendar event id, so a retried booking job
+collides with the existing event (409, treated as success) rather than double-booking.
+
+**A calendar invite is outbound contact.** `sendUpdates="all"` emails the attendee, so a
+booking can reach an inbox without Gmail being involved at all — which meant the send
+allow-list had a second door it did not cover. `create_event` now applies the same
+`targets.csv` check as a send.
 
 ## Safety switches
 
