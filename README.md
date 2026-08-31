@@ -599,6 +599,15 @@ allow-list had a second door it did not cover. `create_event` now applies the sa
 
 ---
 
+## Submission material
+
+| File | What it is |
+|---|---|
+| `docs/devpost.md` | Devpost copy, section by section — including the judge notes with the dashboard secret |
+| `docs/blog.md` | Blog post for Medium or Dev.to (worth +0.2) |
+| `docs/social.md` | Social post drafts (worth +0.2, needs `#AllThingsAgenticHackathon`) |
+| `DEMO.md` | 4-minute demo run sheet with timings and a what-if-it-breaks table |
+
 ## Judge access
 
 - [ ] Grant repo read access to `testing@devpost.com` and `cloudhackathons@google.com`
