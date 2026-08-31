@@ -129,6 +129,12 @@ async def test_an_injection_is_quarantined_and_never_reaches_the_negotiator(wire
     """The whole security design in one test: an attack stops at the Gatekeeper.
 
     If this fails, attacker-controlled text is reaching an agent that writes replies.
+
+    This one asserts a real model call on a deliberately subtle attack — the fixture the
+    regex layer cannot see — so it is inherently non-deterministic and has flaked once in
+    a full run. That is worth stating rather than hiding: the two-layer design exists
+    precisely because a single model judgement on borderline text is not reliable enough
+    to stand alone. The blatant attacks are covered by `prescreen`, which cannot flake.
     """
     target, gmail = wired("subtle_embedded_instruction")
 

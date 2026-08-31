@@ -91,7 +91,11 @@
   </nav>
 </header>
 {% if paused %}<div class="paused">PAUSED — nothing will send. {{ pause_reason }}</div>{% endif %}
-{% if dry_run %}<div class="paused" style="background:#7A5D06">DRY RUN — sends are logged, not delivered.</div>{% endif %}
+{% if dry_run %}
+  <div class="paused" style="background:#7A5D06">DRY RUN — deliberately on. Sends are logged, not delivered.</div>
+{% else %}
+  <div class="paused" style="background:#0A6D80">LIVE — approving a draft sends a real email. Send window {{ window_label }}.</div>
+{% endif %}
 <main>{% block content %}{% endblock %}</main>
 </body>
 </html>

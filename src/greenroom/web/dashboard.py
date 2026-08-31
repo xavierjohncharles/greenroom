@@ -53,7 +53,15 @@ def _chrome(request: Request, nav: str) -> dict[str, Any]:
         "pause_reason": reason,
         "dry_run": settings.dry_run,
         "pending_count": len(repo.list_drafts(status=DraftStatus.PENDING, limit=50)),
+        "window_label": _window_label(),
     }
+
+
+def _window_label() -> str:
+    w = get_config().policy.operations.send_window
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    span = f"{days[w.weekdays[0]]}-{days[w.weekdays[-1]]}" if w.weekdays else "never"
+    return f"{span} {w.start_hour:02d}:00-{w.end_hour:02d}:00 {w.timezone}"
 
 
 def _window_state() -> tuple[bool, str]:

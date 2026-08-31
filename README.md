@@ -36,10 +36,22 @@ crawler away from the approve buttons and the target list.
 it is still a credential, and this repo is shared with external addresses. Paste it at
 [`/login`](https://greenroom-29925954133.europe-west2.run.app/login).
 
-**The service runs with `GREENROOM_DRY_RUN=true`**, so nothing you click can deliver
-mail. Approving a draft queues a send job, the Scheduler executes it, and the send is
-logged rather than delivered — the whole path runs and stops at the last step. Clicking
-Approve on a target and then running the tick is the loop, end to end, safely.
+> ### ⚠️ This service is live
+>
+> Greenroom is running Beat ID's real outreach campaign against real UK students' unions.
+> **`GREENROOM_DRY_RUN` is `false`.** Approving a draft on the dashboard queues a job that
+> sends a genuine email to a genuine organisation, on Beat ID's behalf.
+>
+> **Please browse rather than approve.** Everything worth seeing is visible without
+> changing anything: the researched hooks and their sources, the generated posters, the
+> drafts, the reasoning trace, the quarantine view.
+>
+> Two things limit the blast radius if something is clicked anyway: sends only leave
+> inside **Mon–Fri 09:00–17:00 Europe/London**, and the daily cap is 25. The kill switch
+> on `/settings` stops everything immediately.
+
+Approving a draft queues a send job which the Scheduler executes on the next tick, inside
+the send window. That is the loop end to end.
 
 Worth looking at:
 

@@ -1013,3 +1013,47 @@ against the real API to notice that "outbound contact" is a larger category than
 we send". `create_event` now applies the same check, with tests in both directions.
 
 242 tests.
+
+---
+
+## Mon 31 Aug — live
+
+`GREENROOM_DRY_RUN=false`. Greenroom is running Beat ID's real campaign against real UK
+students' unions.
+
+Pre-flight before flipping, because after this the only thing between a draft and a real
+organisation is a click:
+
+```
+allow-list         21 addresses; anything else refused before it reaches Gmail
+trust mode         21 of 21 on review — nothing sends unattended
+pending drafts     19 pending, 1 already approved
+send window        Mon-Fri 09:00-17:00 Europe/London — CLOSED (18:08)
+daily cap          25, none used
+kill switch        available
+queued sends       1 — Swansea SU, approved on the dashboard at 17:05
+```
+
+The Swansea job goes out at 09:00 Tuesday when the window opens. Showing that email
+before flipping felt like the minimum: "one queued send" is an abstraction, and the thing
+actually queued was a specific message to a specific organisation.
+
+**Turning it on made the README false, which is the interesting part.** The judge section
+I had written an hour earlier said *"the service runs with GREENROOM_DRY_RUN=true, so
+nothing you click can deliver mail"*, and invited judges to click Approve as the best way
+to see the loop. That was true when written and became a live-fire instruction the moment
+the flag changed.
+
+Documentation that describes runtime state goes stale silently, and this one would have
+gone stale in the direction of *inviting a stranger to email a real students' union on
+Beat ID's behalf*. Rewritten as a warning, the login page changed to match, and the
+dashboard banner now renders both states rather than only appearing in dry-run — a banner
+that is absent when the system is live is exactly backwards.
+
+**Also recorded a test flake honestly.** The injection test asserts a real model call on
+the deliberately subtle fixture — the one the regex layer cannot see — and it failed once
+in a full run and passed on a re-run. That is worth documenting rather than quietly
+re-running until green: the two-layer design exists precisely because a single model
+judgement on borderline text is not reliable enough to stand alone, and a flaky test is
+that argument showing up in the suite. The blatant attacks are covered by `prescreen`,
+which cannot flake.
