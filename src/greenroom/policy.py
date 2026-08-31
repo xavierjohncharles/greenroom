@@ -77,7 +77,33 @@ class PolicyVerdict:
 
 def evaluate(terms: ProposedTerms, policy: Policy, *, today: date | None = None) -> PolicyVerdict:
     """Check proposed terms against the deal envelope. Pure and deterministic."""
-    today = today or date.today()
+    with _span(terms) as span:
+        verdict = _evaluate(terms, policy, today=today or date.today())
+        span.summarise(
+            inside_policy=verdict.inside,
+            breaches=verdict.cited_rules or "none",
+            reason=verdict.summary,
+        )
+        return verdict
+
+
+def _span(terms: ProposedTerms):
+    """The policy decision is the single most important step to be able to audit, so it
+    gets its own span even though no model is involved in it."""
+    from greenroom.obs import span
+
+    return span(
+        "policy.evaluate",
+        kind="decision",
+        fee=terms.fee,
+        attendees=terms.attendees,
+        event_date=str(terms.event_date) if terms.event_date else None,
+        wants_free=terms.wants_free,
+        wants_exclusivity=terms.wants_exclusivity,
+    )
+
+
+def _evaluate(terms: ProposedTerms, policy: Policy, *, today: date) -> PolicyVerdict:
     breaches: list[Breach] = []
     esc = policy.escalate
 

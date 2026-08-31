@@ -29,7 +29,7 @@ from email.utils import formataddr, make_msgid
 from typing import Any
 
 from greenroom.config import get_config
-from greenroom.obs import get_logger
+from greenroom.obs import get_logger, tool_span
 from greenroom.settings import get_settings
 
 log = get_logger(__name__)
@@ -195,14 +195,19 @@ class GmailTool:
         to = assert_allowed_recipient(to)
         raw = self._build_mime(to=to, subject=subject, body_text=body_text, attachments=attachments)
 
-        if self.dry_run:
-            log.info(
-                "dry-run: would send new message",
-                extra={"to": to, "subject": subject, "body_chars": len(body_text)},
-            )
-            return SentMessage(message_id="DRYRUN", thread_id="DRYRUN", dry_run=True)
+        with tool_span(
+            "gmail.send_new", to=to, subject=subject, dry_run=self.dry_run
+        ) as span:
+            if self.dry_run:
+                log.info(
+                    "dry-run: would send new message",
+                    extra={"to": to, "subject": subject, "body_chars": len(body_text)},
+                )
+                span.summarise(result="dry-run, not delivered")
+                return SentMessage(message_id="DRYRUN", thread_id="DRYRUN", dry_run=True)
 
-        sent = self.svc.users().messages().send(userId=USER_ID, body={"raw": raw}).execute()
+            sent = self.svc.users().messages().send(userId=USER_ID, body={"raw": raw}).execute()
+            span.summarise(message_id=sent["id"], thread_id=sent["threadId"])
         result = SentMessage(sent["id"], sent["threadId"], dry_run=False)
         self.add_label(result.thread_id, self.label_root)
         log.info(

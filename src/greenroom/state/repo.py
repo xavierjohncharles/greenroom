@@ -265,6 +265,8 @@ class Repo:
         job_id: str | None = None,
         detail: dict | None = None,
     ) -> None:
+        from greenroom.obs import current_trace_id
+
         event = EventDoc(
             event_id=uuid.uuid4().hex,
             kind=kind,
@@ -273,7 +275,12 @@ class Repo:
             job_id=job_id,
             detail=detail or {},
         )
-        self._col("events").document(event.event_id).set(event.model_dump())
+        # Stamp the trace id so a line in the dashboard can be followed into Cloud Trace.
+        # The two views answer different questions — "what did it decide" and "how long
+        # did each step take" — and being able to jump between them is the point.
+        self._col("events").document(event.event_id).set(
+            event.model_dump() | {"trace_id": current_trace_id()}
+        )
 
     # -- control plane -----------------------------------------------------
     def is_paused(self) -> tuple[bool, str]:

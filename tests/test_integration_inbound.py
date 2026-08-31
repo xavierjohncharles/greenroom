@@ -91,7 +91,7 @@ def wired(repo, queue, monkeypatch, real_config_dir):
         ThreadDoc(gmail_thread_id=THREAD_ID, target_id=doc.target_id, subject="Beat ID")
     )
 
-    def build(fixture_key: str):
+    def build(fixture_key: str, body: str | None = None):
         f = fixture(fixture_key)
         message = StubInbound(
             message_id=MESSAGE_ID,
@@ -100,7 +100,7 @@ def wired(repo, queue, monkeypatch, real_config_dir):
             from_addr=doc.email,
             to_addr="admin@beatidapp.com",
             subject=f.subject,
-            body_text=f.body,
+            body_text=body if body is not None else f.body,
             rfc822_message_id="<orig@su.ac.uk>",
             internal_date_ms=0,
             label_ids=(),
@@ -186,8 +186,24 @@ async def test_a_thread_we_do_not_own_is_never_read(wired, repo):
 
 
 async def test_a_counter_offer_below_the_floor_escalates_citing_the_rule(wired, repo):
-    """£600 against an £850 floor: drafted, but held for a human, with the rule named."""
-    target, gmail = wired("counter_below_floor")
+    """An offer under the floor is drafted, held for a human, and cites the rule.
+
+    The amount is derived from the configured floor rather than written into the fixture.
+    When the floor moved from 850 to 500, the fixture's "budget is 600" stopped being a
+    below-floor offer and started being an acceptable one — the test failed for a reason
+    that had nothing to do with the behaviour it was checking.
+    """
+    from greenroom.config import get_config
+
+    floor = int(get_config().policy.fee.floor)
+    offer = floor - 200
+    target, gmail = wired(
+        "counter_below_floor",
+        body=(
+            f"We'd be interested but our entertainment budget is {offer}. "
+            "Is that something you could work with?\n\nSam"
+        ),
+    )
 
     from greenroom.jobs.inbound import process_message
 
@@ -205,8 +221,11 @@ async def test_a_counter_offer_below_the_floor_escalates_citing_the_rule(wired, 
     assert draft.is_escalation is True
     assert draft.status == DraftStatus.PENDING, "an escalation never sends itself"
     assert draft.mode_at_draft == TrustMode.REVIEW
+    from greenroom.config import get_config
+
+    floor = int(get_config().policy.fee.floor)
     assert "fee.floor" in draft.policy_rule
-    assert "850" in draft.policy_rule, "cite the configured number, not a paraphrase"
+    assert str(floor) in draft.policy_rule, "cite the configured number, not a paraphrase"
     assert draft.body, "a recommended reply is still drafted for the human to approve"
 
     assert (THREAD_ID, "greenroom/escalated") in gmail.labels

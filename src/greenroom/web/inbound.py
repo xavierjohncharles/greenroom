@@ -154,9 +154,11 @@ async def inbound(request: Request) -> JSONResponse:
     )
 
     from greenroom.jobs.inbound import process_history
+    from greenroom.obs import span
 
     try:
-        result = await process_history(history_id=history_id, pubsub_message_id=pubsub_id)
+        with span("inbound", kind="entrypoint", history_id=history_id, pubsub_id=pubsub_id):
+            result = await process_history(history_id=history_id, pubsub_message_id=pubsub_id)
     except Exception as exc:
         # 500 so Pub/Sub retries: a transient Gmail or Firestore failure should not
         # silently lose an inbound reply.

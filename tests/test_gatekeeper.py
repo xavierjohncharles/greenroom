@@ -101,11 +101,14 @@ def test_fee_exactly_at_the_floor_is_accepted(policy):
 
 
 def test_fee_below_the_floor_escalates_and_cites_the_rule(policy):
-    verdict = evaluate(ProposedTerms(fee=600), policy, today=TODAY)
+    """Derived from the configured floor. Pinning literals here meant that changing a
+    number the founder owns broke four tests that were not about that number."""
+    offered = policy.fee.floor - 100
+    verdict = evaluate(ProposedTerms(fee=offered), policy, today=TODAY)
     assert not verdict.inside
     assert verdict.breaches[0].rule_id == "fee.floor"
-    assert "850" in verdict.cited_rules
-    assert "600" in verdict.summary
+    assert str(int(policy.fee.floor)) in verdict.cited_rules
+    assert str(int(offered)) in verdict.summary
 
 
 def test_playing_for_free_always_escalates(policy):
@@ -118,13 +121,16 @@ def test_exclusivity_always_escalates(policy):
 
 
 def test_capacity_above_the_limit_escalates(policy):
-    verdict = evaluate(ProposedTerms(attendees=1200), policy, today=TODAY)
+    verdict = evaluate(
+        ProposedTerms(attendees=policy.escalate.max_attendees * 2), policy, today=TODAY
+    )
     assert verdict.breaches[0].rule_id == "escalate.max_attendees"
-    assert "600" in verdict.cited_rules
+    assert str(policy.escalate.max_attendees) in verdict.cited_rules
 
 
 def test_capacity_under_the_limit_is_fine(policy):
-    assert evaluate(ProposedTerms(attendees=380), policy, today=TODAY).inside
+    under = policy.escalate.max_attendees - 1
+    assert evaluate(ProposedTerms(attendees=under), policy, today=TODAY).inside
 
 
 def test_a_date_outside_every_window_escalates(policy):

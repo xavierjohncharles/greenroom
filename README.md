@@ -482,6 +482,35 @@ already-labelled thread — which was not worth betting a demo on.
 
 ---
 
+## Observability
+
+One trace per inbound message or tick, one span per agent, one span per tool call, one
+for the policy decision. ADK contributes its own spans underneath, so a single trace
+shows the whole chain with timings:
+
+```
+/tick                                24183ms
+  tick  (entrypoint)                 24170ms   limit=2
+    agent.researcher                 22414ms   tools=2  output_chars=1062
+      invoke_agent researcher        21716ms
+        call_llm                     21618ms
+          generate_content gemini-3.5-flash   21616ms
+```
+
+Span attributes are **summaries, never payloads**. Inbound email is untrusted and a
+pitch is a customer's data; neither belongs in a trace backend. Text is truncated hard
+and a raw inbound body is never attached.
+
+Every agent step is also written to Firestore with its trace id, so the dashboard's
+**Reasoning trace** panel shows what the agent decided and why — the hook it found and
+its source, the words it wrote, the policy verdict and the rule cited — with a link
+through to Cloud Trace for the timings. The two views answer different questions and
+being able to jump between them is the point.
+
+Structured JSON logs carry `target_id`, `thread_id` and `job_id` on every line, plus
+`logging.googleapis.com/trace`, so a whole conversation can be pulled out of Cloud
+Logging with one filter and lines up against the trace.
+
 ## Posters — and a note on Imagen
 
 Greenroom generates a 1080×1350 poster per target and attaches it to the pitch. The

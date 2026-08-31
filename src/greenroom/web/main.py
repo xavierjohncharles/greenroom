@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 from greenroom import __version__
 from greenroom.config import ConfigError, get_config
 from greenroom.models import GEMINI_MODEL
-from greenroom.obs import configure_logging, get_logger
+from greenroom.obs import configure_logging, configure_tracing, get_logger
 from greenroom.settings import get_settings
 from greenroom.web.dashboard import router as dashboard_router
 from greenroom.web.inbound import router as inbound_router
@@ -59,6 +59,7 @@ async def lifespan(app: FastAPI):
             "project": settings.google_cloud_project or "(unset)",
             "location": settings.google_cloud_location,
             "dry_run": settings.dry_run,
+            "tracing": _TRACING_ON,
         },
     )
     yield
@@ -71,6 +72,12 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+# Configured here rather than in `lifespan` because FastAPIInstrumentor adds ASGI
+# middleware, and the middleware stack is already built by the time lifespan runs.
+# Instrumenting there appears to work — no error — and silently produces no request
+# spans, which is how the first version shipped a dashboard with no trace links.
+_TRACING_ON = configure_tracing(app)
 
 
 @app.get("/health")
@@ -162,13 +169,16 @@ async def tick(request: Request) -> dict[str, Any]:
         else ""
     )
 
-    results = await run_tick(
-        get_repo(),
-        get_queue(),
-        get_scheduler(),
-        limit=int(request.query_params.get("limit", 10)),
-        topic=topic,
-    )
+    from greenroom.obs import span
+
+    with span("tick", kind="entrypoint", limit=request.query_params.get("limit", "10")):
+        results = await run_tick(
+            get_repo(),
+            get_queue(),
+            get_scheduler(),
+            limit=int(request.query_params.get("limit", 10)),
+            topic=topic,
+        )
     log.info("tick complete", extra=results)
     return {"status": "ok", **results}
 

@@ -167,6 +167,16 @@ class Scheduler:
         self.repo._col("targets").document(target.target_id).update(
             {"research": doc.model_dump(), "updated_at": utcnow()}
         )
+        self.repo.append_event(
+            kind="researched",
+            target_id=target.target_id,
+            detail={
+                "hook": (doc.best_hook or "(none found)")[:300],
+                "source": doc.hook_source,
+                "venue": doc.venue_name,
+                "confidence": doc.confidence,
+            },
+        )
         self.repo.set_status(target.target_id, TargetStatus.RESEARCHED, reason="research complete")
 
         # Poster and draft are independent: a failed poster must not block the pitch.
@@ -257,6 +267,18 @@ class Scheduler:
             ),
         )
         self.repo.create_draft(doc)
+        self.repo.append_event(
+            kind="drafted",
+            target_id=target.target_id,
+            detail={
+                "subject": draft.subject,
+                "words": len(draft.body.split()),
+                "hook_used": draft.hook_used[:200],
+                "why": draft.reasoning[:300],
+                "mode": str(mode),
+                "problems": problems,
+            },
+        )
 
         if mode == TrustMode.AUTOPILOT:
             self.enqueue_send_for_draft(doc)

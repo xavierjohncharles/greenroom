@@ -18,8 +18,23 @@ from greenroom.state.models import JobStatus, JobType, TargetStatus
 
 pytestmark = pytest.mark.integration
 
-MONDAY_10AM = datetime(2026, 8, 31, 9, 0, tzinfo=UTC)  # 10:00 BST, inside the window
-SATURDAY = datetime(2026, 9, 5, 10, 0, tzinfo=UTC)  # a Saturday, comfortably ahead of "now"
+def _next(weekday: int, hour_utc: int) -> datetime:
+    """The next occurrence of a weekday at a given UTC hour, always in the future.
+
+    These were hard-coded dates twice, and rotted twice: a job enqueued *now* is not due
+    before a timestamp in the past, so a fixed date silently stops being claimable the
+    moment the wall clock passes it. Computing forward from now means the fixture cannot
+    expire.
+    """
+    now = datetime.now(UTC)
+    ahead = (weekday - now.weekday()) % 7 or 7
+    return (now + timedelta(days=ahead)).replace(
+        hour=hour_utc, minute=0, second=0, microsecond=0
+    )
+
+
+MONDAY_10AM = _next(0, 9)  # Monday 09:00 UTC = 10:00 BST, inside the send window
+SATURDAY = _next(5, 10)  # a Saturday, outside it
 
 
 @dataclass

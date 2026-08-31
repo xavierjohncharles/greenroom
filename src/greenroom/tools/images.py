@@ -26,7 +26,7 @@ from greenroom.models import (
     POSTER_ASPECT_RATIO,
     POSTER_SIZE_PX,
 )
-from greenroom.obs import get_logger
+from greenroom.obs import get_logger, tool_span
 from greenroom.settings import get_settings
 
 log = get_logger(__name__)
@@ -178,7 +178,9 @@ def make_poster(
         log.info("dry-run: would generate poster", extra={"target_id": target_id})
         return Poster(png=b"", model=IMAGE_MODEL, dry_run=True)
 
-    raw, model = _generate(prompt)
-    png = _crop_to_poster(raw)
-    gcs_uri, public_url = _upload(png, target_id=target_id)
+    with tool_span("image.generate", target_id=target_id, organisation=organisation) as span:
+        raw, model = _generate(prompt)
+        png = _crop_to_poster(raw)
+        gcs_uri, public_url = _upload(png, target_id=target_id)
+        span.summarise(model=model, bytes=len(png), uri=gcs_uri)
     return Poster(png=png, model=model, gcs_uri=gcs_uri, public_url=public_url)

@@ -56,8 +56,12 @@ def test_by_email_is_case_insensitive(real_config_dir: Path):
 
 
 def test_fee_floor_above_standard_is_rejected(tmp_config: Path):
+    """Rewrites whatever floor is configured rather than pinning a literal — the numbers
+    in policy.yaml are the founder's and change; the rule that floor <= standard does not."""
+    import re
+
     path = tmp_config / "policy.yaml"
-    path.write_text(path.read_text().replace("floor: 850", "floor: 5000"))
+    path.write_text(re.sub(r"floor: \d+", "floor: 999999", path.read_text()))
     with pytest.raises(ConfigError, match="floor"):
         load_policy(path)
 

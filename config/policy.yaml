@@ -34,8 +34,8 @@ availability:
 # --- Money ------------------------------------------------------------------
 fee:
   currency: "GBP"
-  standard: 1200        # what we open at
-  floor: 850            # the agent may negotiate down to, but never below, this
+  standard: 800         # what we open at
+  floor: 500            # the agent may negotiate down to, but never below, this
   # A counter-offer at or above `floor` is inside policy and may be accepted.
   # Below `floor` → escalate (rule: fee.floor).
   deposit_pct: 50
@@ -72,7 +72,7 @@ meetings:
 escalate:
   free_event: true            # any request to play for free or "for exposure"
   exclusivity: true           # any exclusivity or non-compete clause
-  max_attendees: 600          # anything above this capacity
+  max_attendees: 400          # anything above this capacity
   multi_date_commitment: true # any request to commit to more than one date at once
   contract_or_legal: true     # anything mentioning contracts, terms, insurance, legal
   media_or_recording: true    # filming, streaming or recording rights

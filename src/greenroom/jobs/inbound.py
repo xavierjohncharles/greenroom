@@ -402,6 +402,18 @@ async def draft_reply(
         )
     )
 
+    repo.append_event(
+        kind="policy_evaluated",
+        target_id=target_id,
+        thread_id=thread_id,
+        detail={
+            "inside_policy": outcome.verdict.inside,
+            "rules": outcome.policy_rule or "none breached",
+            "reason": outcome.escalation_reason or "inside the envelope",
+            "why": outcome.draft.reasoning[:300],
+        },
+    )
+
     if outcome.should_escalate:
         scheduler.gmail.add_label(thread_id, get_settings().label_escalated)
         repo.set_status(

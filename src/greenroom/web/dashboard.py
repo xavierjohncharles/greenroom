@@ -195,6 +195,7 @@ async def target_view(request: Request, target_id: str):
         {
             **_chrome(request, "board"),
             "target": target,
+            "project": get_settings().google_cloud_project,
             "research": research,
             "drafts": repo.list_drafts(target_id=target_id),
             "messages": messages,

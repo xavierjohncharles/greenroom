@@ -926,3 +926,51 @@ because the original code treated the first model's 429 as fatal before trying t
 Quotas are per-model, so the flagship being busy says nothing about the fallback. It now
 tries both before giving up, and only raises `RateLimited` if both were rate limited
 specifically.
+
+---
+
+## Mon 31 Aug — the audit, and a mandatory-stack item that was never implemented
+
+Audited the project against the actual Devpost rules rather than my memory of the brief,
+and found the worst kind of gap: **Cloud Trace was on the mandated stack, claimed in the
+README, and did not exist.**
+
+The dependencies were declared. `obs/logging.py` read span IDs to correlate logs. The
+README said "span per agent and per tool call". But no exporter was ever configured and
+no span was ever created — Cloud Trace was empty. Every individual piece looked right,
+which is exactly why it survived nine steps without being noticed: I had written the
+*consumer* of tracing and never the producer, and nothing failed, because there is no
+error for "you are correlating logs against a trace that does not exist".
+
+A false claim in a README is worse than a missing feature. A judge can check it in
+thirty seconds.
+
+**Now implemented properly**: one trace per tick or inbound message, a span per agent, a
+span per tool call, and a span for the policy decision — that last one because the policy
+verdict is the single most important step to be able to audit, even though no model is
+involved in it. ADK contributes its own spans underneath, so one trace shows
+`tick → agent.researcher → invoke_agent → call_llm → generate_content` with timings.
+
+**Two things I got wrong on the way, both about ordering.**
+
+`FastAPIInstrumentor.instrument_app()` was called inside `lifespan`. That appears to
+work — no error, no warning — and silently produces no request spans, because ASGI
+middleware must be added before the app starts serving and the stack is already built by
+then. It now runs at import. The tell was a dashboard rendering zero trace links while
+Cloud Trace happily showed agent spans: the agent spans existed because we create them
+ourselves, and the request spans did not because the middleware never attached.
+
+I also added explicit `tick` and `inbound` spans rather than relying on the instrumentation
+alone. The brief asked for "one trace per inbound/tick" specifically, and an entry point
+whose trace depends on middleware ordering is one bad import away from being untraceable.
+
+**Span attributes are summaries, never payloads.** Inbound email is attacker-controlled
+and a pitch is a customer's data. Neither belongs in a trace backend, which is a different
+system with different access controls and a different retention policy. Text is truncated
+to 400 characters and a raw inbound body is never attached at all.
+
+**And a fixture rotted for the second time.** `MONDAY_10AM = datetime(2026, 8, 31, 9, 0)`
+was fine when written and became a *past* timestamp once the wall clock passed it — so a
+job enqueued now was not due before it, and the kill-switch test failed for a reason that
+had nothing to do with kill switches. Same shape as the Saturday fixture in step 3. Both
+are now computed forward from `now`, so they cannot expire.

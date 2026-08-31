@@ -21,7 +21,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import BaseSessionService, InMemorySessionService
 from google.genai import types
 
-from greenroom.obs import get_logger
+from greenroom.obs import agent_span, get_logger
 from greenroom.settings import get_settings
 
 log = get_logger(__name__)
@@ -71,11 +71,21 @@ async def run_agent(
     message = types.Content(role="user", parts=[types.Part(text=prompt)])
     final_text = ""
 
-    async for event in runner.run_async(
-        user_id=user_id, session_id=session_id, new_message=message
-    ):
-        if event.is_final_response() and event.content and event.content.parts:
-            final_text = "".join(p.text or "" for p in event.content.parts)
+    # One span per agent invocation. The prompt is summarised rather than attached:
+    # it can contain a customer's pitch or quoted spans from untrusted email, and a
+    # trace backend is not the place for either.
+    with agent_span(
+        agent.name,
+        model=agent.model,
+        tools=len(agent.tools or []),
+        prompt_chars=len(prompt),
+    ) as span:
+        async for event in runner.run_async(
+            user_id=user_id, session_id=session_id, new_message=message
+        ):
+            if event.is_final_response() and event.content and event.content.parts:
+                final_text = "".join(p.text or "" for p in event.content.parts)
+        span.summarise(output_chars=len(final_text), output_preview=final_text[:200])
 
     log.info(
         "agent run complete",

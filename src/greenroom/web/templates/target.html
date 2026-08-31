@@ -106,15 +106,34 @@
 {% endfor %}
 {% endif %}
 
-<h2>Trace</h2>
+<h2>Reasoning trace</h2>
+<p class="sub">Every step the agent took, why, and what it decided. Each line is an
+OpenTelemetry span — follow it into Cloud Trace for timings and the full chain.</p>
 <div class="card">
 {% if events %}
 <table>
   {% for e in events %}
   <tr>
-    <td class="mono" style="width:130px">{{ e.created_at.strftime('%d %b %H:%M:%S') }}</td>
-    <td><strong>{{ e.kind }}</strong>
-      {% if e.detail %}<div class="muted mono">{{ e.detail }}</div>{% endif %}</td>
+    <td class="mono" style="width:96px; vertical-align:top">{{ e.created_at.strftime('%d %b %H:%M') }}</td>
+    <td>
+      <span class="pill {{ 'escalated' if e.kind in ('escalated','quarantined') else '' }}">{{ e.kind.replace('_',' ') }}</span>
+      {% if e.detail %}
+        <div style="margin-top:6px">
+          {% for k, v in e.detail.items() %}
+            {% if v not in (None, '', [], {}) %}
+              <div><span class="muted mono">{{ k }}</span> {{ v }}</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </td>
+    <td style="width:110px; vertical-align:top; text-align:right">
+      {% if e.trace_id %}
+        <a class="muted mono" style="font-size:11px"
+           href="https://console.cloud.google.com/traces/list?project={{ project }}&tid={{ e.trace_id }}"
+           target="_blank" rel="noreferrer">Cloud Trace →</a>
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>

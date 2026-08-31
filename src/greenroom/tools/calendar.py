@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from greenroom.config import get_config
-from greenroom.obs import get_logger
+from greenroom.obs import get_logger, tool_span
 from greenroom.settings import get_settings
 
 log = get_logger(__name__)
@@ -139,16 +139,26 @@ class CalendarTool:
         policy = get_config().policy.meetings
         event_id = _sanitise_event_id(idempotency_key)
 
+        span_ctx = tool_span(
+            "calendar.create_event",
+            summary=summary,
+            start=slot.start.isoformat(),
+            attendee=attendee_email,
+            event_id=event_id,
+            dry_run=self.dry_run,
+        )
         if self.dry_run:
-            log.info(
-                "dry-run: would create calendar event",
-                extra={
-                    "summary": summary,
-                    "start": slot.start.isoformat(),
-                    "attendee": attendee_email,
-                    "event_id": event_id,
-                },
-            )
+            with span_ctx as span:
+                log.info(
+                    "dry-run: would create calendar event",
+                    extra={
+                        "summary": summary,
+                        "start": slot.start.isoformat(),
+                        "attendee": attendee_email,
+                        "event_id": event_id,
+                    },
+                )
+                span.summarise(result="dry-run, no event created")
             return BookedEvent(event_id, "https://calendar.google.com/DRYRUN", slot.start, True)
 
         start_rfc, end_rfc = slot.to_rfc3339()
@@ -177,6 +187,8 @@ class CalendarTool:
             else:
                 raise
 
+        with span_ctx as span:
+            span.summarise(created_event_id=created["id"], link=created.get("htmlLink", ""))
         log.info(
             "calendar event created",
             extra={"event_id": created["id"], "start": slot.start.isoformat()},
